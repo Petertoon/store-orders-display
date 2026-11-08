@@ -1,3 +1,4 @@
+[README (10).md](https://github.com/user-attachments/files/34536883/README.10.md)
 # Store Orders Display
 
 Order screens and receipt printers for several stores sold on one Wix Stores site.
@@ -47,6 +48,27 @@ Wix Stores order ──> Velo events.js ──> Render server ──> store scre
 Edit `stores.json` (one block per store), commit, and Render redeploys.
 Each store's screen link and its Pi's agent key are on the master screen (**Copy link** / **Copy agent key**).
 They're derived from `MASTER_KEY`, so changing `MASTER_KEY` changes every link and key.
+
+## Email (optional, per store)
+
+Add addresses to a store's `"email"` list in `stores.json`, e.g.
+`"email": ["owner@theirstore.com", "manager@theirstore.com"]`. Leave it `[]` for no email.
+Every new order for that store is emailed with the same details as the printed ticket.
+
+The server sends through any SMTP account. Add these in Render → Environment:
+
+| Variable | Gmail example |
+|---|---|
+| `SMTP_HOST` | `smtp.gmail.com` |
+| `SMTP_PORT` | `465` |
+| `SMTP_USER` | the Gmail address |
+| `SMTP_PASS` | a Gmail **App Password** (Google Account → Security → 2-Step Verification → App passwords), not the normal password |
+| `EMAIL_FROM` | `Store Orders <that Gmail address>` |
+
+Gmail allows about 500 emails a day. For more, or to send from your own domain,
+use a sending service (Resend, SendGrid, Zoho) with its SMTP settings instead.
+The master screen shows each store's email status; a failed email never blocks the
+order, the screen or the printer.
 
 ## 3. Wix site
 
