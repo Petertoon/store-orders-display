@@ -1,5 +1,5 @@
 {
-  "_help": "One entry per store. skuPrefix is how an order item is matched to its store: every product SKU in Wix Stores for this store must start with it (e.g. A-1001). display/printer turn the store screen and the store printer on or off. agentId is the Raspberry Pi at that store's address.",
+  "_help": "One entry per store. skuPrefix is how an order item is matched to its store: every product SKU in Wix Stores for this store must start with it (e.g. A-1001). display/printer turn the store screen and the store printer on or off. email is a list of addresses that get every new order for this store (leave it [] for no email). agentId is the Raspberry Pi at that store's address.",
   "stores": [
     {
       "id": "store-a",
@@ -8,6 +8,7 @@
       "color": "#f59e0b",
       "display": true,
       "printer": true,
+      "email": [],
       "agentId": "pi-store-a"
     },
     {
@@ -17,6 +18,7 @@
       "color": "#38bdf8",
       "display": true,
       "printer": true,
+      "email": [],
       "agentId": "pi-store-b"
     }
   ]
