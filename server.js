@@ -1,3 +1,4 @@
+
 // Store Orders Display — receives Wix Stores orders, splits them per store (by SKU prefix),
 // pushes them live to each store's screen and to the support master, and queues print jobs
 // for each store's Raspberry Pi print agent.
@@ -7,6 +8,7 @@ const path = require('path');
 const fs = require('fs');
 const db = require('./db');
 const { splitOrder, UNASSIGNED } = require('./orders');
+const email = require('./email');
 
 const PORT = process.env.PORT || 3000;
 const MASTER_KEY = process.env.MASTER_KEY;
@@ -71,6 +73,20 @@ async function queuePrint(ticket) {
   return job;
 }
 
+// Last email result per store, shown on the master screen.
+const emailStatus = new Map(); // storeId -> { ok, error, at, orderNumber }
+function emailTicket(ticket) {
+  const store = storeById(ticket.storeId);
+  if (!store || !email.recipients(store).length) return;
+  email.sendTicketEmail(store, ticket).then((r) => {
+    if (r.skipped) return;
+    const st = { ok: r.ok, error: r.error || null, at: new Date().toISOString(), orderNumber: ticket.orderNumber };
+    emailStatus.set(store.id, st);
+    console.log(`[email] ${store.id} #${ticket.orderNumber} ${r.ok ? 'sent' : 'FAILED: ' + r.error}`);
+    broadcast('email', { storeId: store.id, ...st }, null);
+  });
+}
+
 async function handleNewOrder(rawOrder) {
   const tickets = splitOrder(rawOrder, stores);
   const created = [];
@@ -80,6 +96,7 @@ async function handleNewOrder(rawOrder) {
     created.push(ticket);
     broadcast('ticket', ticket, ticket.storeId);
     await queuePrint(ticket);
+    emailTicket(ticket); // runs in the background; never delays the order
   }
   return { tickets: tickets.length, created: created.length,
     unassigned: tickets.some((t) => t.storeId === UNASSIGNED) };
@@ -216,7 +233,10 @@ app.get('/api/master/overview', async (req, res) => {
     stores: stores.map((s) => ({
       ...s,
       displayUrl: `${base}/store.html?store=${encodeURIComponent(s.id)}&key=${keyFor('store:' + s.id)}`,
+      emails: email.recipients(s),
+      emailStatus: emailStatus.get(s.id) || null,
     })),
+    emailConfigured: email.enabled,
     agents: agentSummary().map((a) => ({ ...a, agentKey: keyFor('agent:' + a.agentId) })),
     jobs: await db.recentJobs(50),
   });
