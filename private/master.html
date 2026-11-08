@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -92,8 +93,16 @@
         '<div class="muted">SKU prefix <span class="mono">' + esc(s.skuPrefix) + '</span> · ' + active + ' active</div></div>' +
         '<span class="pill ' + (s.display ? 'ok' : '') + '">screen ' + (s.display ? 'on' : 'off') + '</span>' +
         '<span class="pill ' + (s.printer ? 'ok' : '') + '">printer ' + (s.printer ? 'on' : 'off') + '</span>' +
+        emailPill(s) +
         (s.display ? '<a class="small-btn" href="' + esc(s.displayUrl) + '" target="_blank">Open</a><button class="small-btn" data-copy="' + esc(s.displayUrl) + '">Copy link</button>' : '') + '</div>';
     }).join('');
+  }
+  function emailPill(s) {
+    if (!s.emails || !s.emails.length) return '<span class="pill">email off</span>';
+    if (!data.emailConfigured) return '<span class="pill bad" title="Add SMTP settings in Render">email not set up</span>';
+    var st = s.emailStatus, title = esc(s.emails.join(', '));
+    if (st && !st.ok) return '<span class="pill bad" title="' + esc(st.error) + '">email failed #' + esc(st.orderNumber) + '</span>';
+    return '<span class="pill ok" title="' + title + '">email on' + (st ? ' · sent ' + ago(st.at) : '') + '</span>';
   }
   function renderAgents() {
     $('agents').innerHTML = data.agents.length ? data.agents.map(function (a) {
@@ -173,6 +182,11 @@
       renderJobs();
     });
     es.addEventListener('agents', function () { refresh(); });
+    es.addEventListener('email', function (e) {
+      var d = JSON.parse(e.data), s = storeOf(d.storeId);
+      if (s) { s.emailStatus = d; renderStores(); }
+      if (!d.ok) toast('Email to ' + (s ? s.name : d.storeId) + ' failed: ' + d.error);
+    });
   }
   setInterval(function () { api('/api/master/overview').then(function (d) { data = d; renderStores(); renderAgents(); renderJobs(); }); }, 15000);
   connect();
