@@ -1,0 +1,10 @@
+{
+  "server": "https://YOUR-RENDER-SERVICE.onrender.com",
+  "agentId": "pi-store-a",
+  "agentKey": "PASTE-FROM-MASTER-SCREEN",
+  "timeZone": "America/Chicago",
+  "pollMs": 3000,
+  "printers": [
+    { "storeId": "store-a", "type": "epson", "ip": "192.168.1.125", "port": 9100, "width": 48 }
+  ]
+}

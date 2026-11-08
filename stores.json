@@ -1,0 +1,23 @@
+{
+  "_help": "One entry per store. skuPrefix is how an order item is matched to its store: every product SKU in Wix Stores for this store must start with it (e.g. A-1001). display/printer turn the store screen and the store printer on or off. agentId is the Raspberry Pi at that store's address.",
+  "stores": [
+    {
+      "id": "store-a",
+      "name": "Store A (TEST)",
+      "skuPrefix": "A-",
+      "color": "#f59e0b",
+      "display": true,
+      "printer": true,
+      "agentId": "pi-store-a"
+    },
+    {
+      "id": "store-b",
+      "name": "Store B (TEST)",
+      "skuPrefix": "B-",
+      "color": "#38bdf8",
+      "display": true,
+      "printer": true,
+      "agentId": "pi-store-b"
+    }
+  ]
+}

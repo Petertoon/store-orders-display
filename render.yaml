@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: store-orders-display
+    runtime: node
+    plan: starter            # paid: free tier sleeps and misses orders
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: MASTER_KEY
+        generateValue: true
+      - key: WEBHOOK_TOKEN
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false

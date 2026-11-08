@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Master · Store Orders</title>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --card:#1f232c; --line:#2c313c; --text:#eef1f6; --muted:#8b93a3;
+    --ok:#22c55e; --bad:#ef4444; --warn:#f59e0b; --blue:#3b82f6; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; font-size:15px; }
+  header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; padding:12px 16px; background:var(--panel); border-bottom:1px solid var(--line); }
+  h1 { font-size:20px; margin:0; }
+  h1 small { color:var(--muted); font-weight:400; font-size:14px; margin-left:8px; }
+  .hbtns button, .btn { background:#2d3340; color:var(--text); border:0; border-radius:8px; padding:9px 14px; font-size:14px; cursor:pointer; margin-left:8px; }
+  .btn.primary { background:var(--blue); }
+  .conn { color:var(--muted); margin-left:12px; }
+  .conn.ok { color:var(--ok); }
+  .wrap { padding:16px; display:grid; grid-template-columns: 1.6fr 1fr; grid-gap:16px; }
+  @media (max-width:900px) { .wrap { grid-template-columns:1fr; } }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:16px; }
+  section h2 { font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 10px; display:flex; justify-content:space-between; align-items:center; }
+  .alert { background:#3a1414; border:1px solid var(--bad); color:#fecaca; border-radius:10px; padding:10px 12px; margin-bottom:12px; display:none; }
+  .row { display:flex; align-items:center; padding:9px 0; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .row:last-child { border-bottom:0; }
+  .dot { width:12px; height:12px; border-radius:50%; display:inline-block; margin-right:8px; flex:0 0 auto; }
+  .grow { flex:1; min-width:140px; }
+  .muted { color:var(--muted); font-size:13px; }
+  .pill { font-size:12px; padding:3px 8px; border-radius:99px; background:#2d3340; margin-left:6px; white-space:nowrap; }
+  .pill.ok { background:#123320; color:#86efac; } .pill.bad { background:#3a1414; color:#fca5a5; }
+  .pill.new { background:#13284a; color:#93c5fd; } .pill.picking { background:#3a2a0b; color:#fcd34d; }
+  .pill.ready { background:#123320; color:#86efac; } .pill.done, .pill.cancelled { background:#2d3340; color:var(--muted); }
+  .mono { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; word-break:break-all; }
+  .orders { max-height:70vh; overflow-y:auto; }
+  .order { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:8px; }
+  .order .top { display:flex; justify-content:space-between; align-items:center; }
+  .order b { font-size:16px; }
+  .order ul { margin:6px 0 0; padding-left:18px; color:#c9d1de; }
+  .filters { display:flex; flex-wrap:wrap; margin-bottom:10px; }
+  .filters button { background:#2d3340; color:var(--text); border:1px solid transparent; border-radius:99px; padding:5px 12px; margin:0 6px 6px 0; cursor:pointer; font-size:13px; }
+  .filters button.on { border-color:var(--text); }
+  a { color:#93c5fd; }
+  .small-btn { background:#2d3340; color:var(--text); border:0; border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer; margin-left:6px; }
+  #toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#2d3340; padding:10px 16px; border-radius:8px; display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Store Orders <small>Master · support view</small><span class="conn" id="conn">● connecting</span></h1>
+  <div class="hbtns"><button id="test" class="primary btn">Send test order</button><button id="reload">Reload stores</button></div>
+</header>
+<div class="wrap">
+  <div>
+    <div class="alert" id="unassigned"></div>
+    <section>
+      <h2>All orders <span id="ocount"></span></h2>
+      <div class="filters" id="filters"></div>
+      <div class="orders" id="orders"></div>
+    </section>
+  </div>
+  <div>
+    <section><h2>Stores</h2><div id="stores"></div></section>
+    <section><h2>Print agents (Raspberry Pi)</h2><div id="agents"></div></section>
+    <section><h2>Recent print jobs</h2><div id="jobs"></div></section>
+  </div>
+</div>
+<div id="toast"></div>
+<script>
+(function () {
+  var KEY = new URLSearchParams(location.search).get('key');
+  var data = { stores: [], agents: [], jobs: [] }, tickets = {}, filter = 'all';
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
+  function api(p, o) {
+    o = o || {}; o.headers = { 'Content-Type': 'application/json', 'x-key': KEY };
+    return fetch(p, o).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+  }
+  function toast(m) { var t = $('toast'); t.textContent = m; t.style.display = 'block'; setTimeout(function () { t.style.display = 'none'; }, 2500); }
+  function storeOf(id) { for (var i = 0; i < data.stores.length; i++) if (data.stores[i].id === id) return data.stores[i]; return null; }
+  function ago(iso) { if (!iso) return 'never'; var m = Math.floor((Date.now() - Date.parse(iso)) / 60000); return m < 1 ? 'just now' : m < 60 ? m + 'm ago' : Math.floor(m / 60) + 'h ' + (m % 60) + 'm ago'; }
+  function copy(text) {
+    if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { toast('Copied'); });
+    else prompt('Copy this:', text);
+  }
+
+  function renderStores() {
+    $('stores').innerHTML = data.stores.map(function (s) {
+      var active = Object.keys(tickets).filter(function (k) { var t = tickets[k]; return t.storeId === s.id && ['new','picking','ready'].indexOf(t.status) !== -1; }).length;
+      return '<div class="row"><span class="dot" style="background:' + esc(s.color) + '"></span><div class="grow"><b>' + esc(s.name) + '</b>' +
+        '<div class="muted">SKU prefix <span class="mono">' + esc(s.skuPrefix) + '</span> · ' + active + ' active</div></div>' +
+        '<span class="pill ' + (s.display ? 'ok' : '') + '">screen ' + (s.display ? 'on' : 'off') + '</span>' +
+        '<span class="pill ' + (s.printer ? 'ok' : '') + '">printer ' + (s.printer ? 'on' : 'off') + '</span>' +
+        (s.display ? '<a class="small-btn" href="' + esc(s.displayUrl) + '" target="_blank">Open</a><button class="small-btn" data-copy="' + esc(s.displayUrl) + '">Copy link</button>' : '') + '</div>';
+    }).join('');
+  }
+  function renderAgents() {
+    $('agents').innerHTML = data.agents.length ? data.agents.map(function (a) {
+      var printers = (a.printers || []).map(function (p) {
+        var s = storeOf(p.storeId);
+        return '<span class="pill ' + (p.ok ? 'ok' : 'bad') + '" title="' + esc(p.error || '') + '">' + esc(s ? s.name : p.storeId) + ': ' + (p.ok ? 'ready' : esc(p.error || 'offline')) + '</span>';
+      }).join('');
+      return '<div class="row"><div class="grow"><b>' + esc(a.agentId) + '</b> <span class="pill ' + (a.online ? 'ok' : 'bad') + '">' + (a.online ? 'online' : 'offline') + '</span>' +
+        '<div class="muted">last seen ' + ago(a.lastSeen) + '</div><div style="margin-top:4px">' + printers + '</div></div>' +
+        '<button class="small-btn" data-copy="' + esc(a.agentKey) + '">Copy agent key</button></div>';
+    }).join('') : '<div class="muted">No stores have printing turned on.</div>';
+  }
+  function renderJobs() {
+    $('jobs').innerHTML = data.jobs.length ? data.jobs.slice(0, 25).map(function (j) {
+      var s = storeOf(j.storeId), t = tickets[j.ticketId];
+      var cls = j.status === 'done' ? 'ok' : j.status === 'failed' ? 'bad' : '';
+      return '<div class="row"><div class="grow">' + esc(s ? s.name : j.storeId) + ' · #' + esc(t ? t.orderNumber : j.ticketId.split(':')[0].slice(0, 8)) +
+        '<div class="muted">' + ago(j.createdAt) + (j.attempts > 1 ? ' · try ' + j.attempts : '') + (j.error ? ' · ' + esc(j.error) : '') + '</div></div>' +
+        '<span class="pill ' + cls + '">' + esc(j.status) + '</span>' +
+        (j.status === 'failed' ? '<button class="small-btn" data-reprint="' + esc(j.ticketId) + '">Retry</button>' : '') + '</div>';
+    }).join('') : '<div class="muted">No print jobs yet.</div>';
+  }
+  function renderOrders() {
+    var ids = ['all'].concat(data.stores.map(function (s) { return s.id; }), ['unassigned']);
+    $('filters').innerHTML = ids.map(function (id) {
+      var s = storeOf(id);
+      return '<button data-filter="' + esc(id) + '" class="' + (filter === id ? 'on' : '') + '">' + esc(id === 'all' ? 'All stores' : id === 'unassigned' ? 'Unassigned' : s.name) + '</button>';
+    }).join('');
+    var list = Object.keys(tickets).map(function (k) { return tickets[k]; })
+      .filter(function (t) { return filter === 'all' || t.storeId === filter; })
+      .sort(function (a, b) { return b.createdAt.localeCompare(a.createdAt); });
+    $('ocount').textContent = list.length;
+    $('orders').innerHTML = list.length ? list.map(function (t) {
+      var s = storeOf(t.storeId);
+      return '<div class="order"><div class="top"><div><span class="dot" style="background:' + esc(s ? s.color : '#ef4444') + '"></span>' +
+        '<b>#' + esc(t.orderNumber) + '</b> <span class="muted">' + esc(s ? s.name : 'UNASSIGNED') + '</span></div>' +
+        '<div><span class="muted">' + ago(t.createdAt) + '</span><span class="pill ' + esc(t.status) + '">' + esc(t.status) + '</span></div></div>' +
+        '<div class="muted">' + esc(t.customer.name) + (t.customer.phone ? ' · ' + esc(t.customer.phone) : '') + '</div>' +
+        '<ul>' + t.items.map(function (i) { return '<li>' + esc(i.qty) + '× ' + esc(i.name) + ' <span class="mono">#' + esc(i.sku || '—') + '</span></li>'; }).join('') + '</ul></div>';
+    }).join('') : '<div class="muted">No orders in the last 12 hours.</div>';
+
+    var un = Object.keys(tickets).map(function (k) { return tickets[k]; }).filter(function (t) { return t.storeId === 'unassigned' && t.status !== 'done' && t.status !== 'cancelled'; });
+    $('unassigned').style.display = un.length ? 'block' : 'none';
+    $('unassigned').innerHTML = un.length ? '<b>' + un.length + ' order(s) have items whose SKU doesn\'t match any store.</b> These items didn\'t go to any store screen or printer. Fix the product SKU in Wix Stores (it must start with the store\'s prefix). Orders: ' +
+      un.map(function (t) { return '#' + esc(t.orderNumber); }).join(', ') +
+      ' <button class="small-btn" data-clear-unassigned="1">Mark handled</button>' : '';
+  }
+  function renderAll() { renderStores(); renderAgents(); renderJobs(); renderOrders(); }
+
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    if (b.getAttribute('data-copy')) copy(b.getAttribute('data-copy'));
+    if (b.getAttribute('data-filter')) { filter = b.getAttribute('data-filter'); renderOrders(); }
+    if (b.getAttribute('data-reprint')) api('/api/tickets/' + encodeURIComponent(b.getAttribute('data-reprint')) + '/reprint', { method: 'POST', body: '{}' }).then(function () { toast('Re-sent to printer'); }, function () { toast('Retry failed'); });
+    if (b.getAttribute('data-clear-unassigned')) {
+      Object.keys(tickets).forEach(function (k) { var t = tickets[k]; if (t.storeId === 'unassigned' && t.status !== 'done')
+        api('/api/tickets/' + encodeURIComponent(t.id) + '/status', { method: 'POST', body: JSON.stringify({ status: 'done' }) }); });
+    }
+  });
+  $('test').onclick = function () { api('/api/test-order', { method: 'POST', body: '{}' }).then(function (r) { toast('Test order sent to ' + r.created + ' store(s)'); }, function () { toast('Test failed'); }); };
+  $('reload').onclick = function () { api('/api/master/reload-stores', { method: 'POST', body: '{}' }).then(function () { refresh(); toast('Stores reloaded'); }); };
+
+  function refresh() {
+    return Promise.all([api('/api/master/overview'), api('/api/tickets?store=all')]).then(function (r) {
+      data = r[0]; tickets = {}; r[1].forEach(function (t) { tickets[t.id] = t; }); renderAll();
+    });
+  }
+  function connect() {
+    var es = new EventSource('/stream?store=all&key=' + encodeURIComponent(KEY));
+    es.onopen = function () { $('conn').className = 'conn ok'; $('conn').textContent = '● live'; refresh(); };
+    es.onerror = function () { $('conn').className = 'conn'; $('conn').textContent = '● reconnecting'; };
+    es.addEventListener('ticket', function (e) { var t = JSON.parse(e.data); tickets[t.id] = t; renderOrders(); renderStores(); });
+    es.addEventListener('job', function (e) {
+      var j = JSON.parse(e.data), found = false;
+      data.jobs = data.jobs.map(function (x) { if (x.id === j.id) { found = true; return j; } return x; });
+      if (!found) data.jobs.unshift(j);
+      renderJobs();
+    });
+    es.addEventListener('agents', function () { refresh(); });
+  }
+  setInterval(function () { api('/api/master/overview').then(function (d) { data = d; renderStores(); renderAgents(); renderJobs(); }); }, 15000);
+  connect();
+})();
+</script>
+</body>
+</html>

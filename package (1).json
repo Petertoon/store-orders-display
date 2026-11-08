@@ -1,0 +1,9 @@
+{
+  "name": "store-orders-print-agent",
+  "version": "1.0.0",
+  "description": "Raspberry Pi print agent for Store Orders Display",
+  "main": "agent.js",
+  "scripts": { "start": "node agent.js" },
+  "engines": { "node": ">=18" },
+  "dependencies": { "node-thermal-printer": "^4.4.4" }
+}

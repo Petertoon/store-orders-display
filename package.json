@@ -1,0 +1,16 @@
+{
+  "name": "store-orders-display",
+  "version": "1.0.0",
+  "description": "Order display screens and receipt printers for multiple stores on one Wix Stores site",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
+  }
+}
