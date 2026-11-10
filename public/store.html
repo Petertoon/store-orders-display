@@ -62,6 +62,18 @@
   .printed { font-size: 13px; color: var(--ready); margin-left: 8px; }
   .noprint { font-size: 13px; color: var(--late); margin-left: 8px; }
   .empty { color: var(--muted); text-align: center; margin-top: 40px; }
+  .bellbtn { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 700; padding: 7px 12px;
+    border-radius: 99px; border: 1px solid var(--line); background: #2d3340; color: var(--muted); cursor: pointer; }
+  .bellbtn svg { width: 18px; height: 18px; }
+  .bellbtn.on { background: #123320; color: #86efac; border-color: #1f6b3d; }
+  #alert { display: none; align-items: center; justify-content: center; gap: 14px; padding: 16px; cursor: pointer;
+    background: var(--late); color: #fff; font-size: 24px; font-weight: 800; text-align: center; user-select: none; }
+  #alert.show { display: flex; animation: alertflash 1s steps(2) infinite; }
+  #alert small { font-size: 16px; font-weight: 600; opacity: .9; }
+  #alert svg { width: 30px; height: 30px; animation: swing .5s ease-in-out infinite alternate; }
+  @keyframes alertflash { 50% { background: #b91c1c; } }
+  @keyframes swing { from { transform: rotate(-18deg); } to { transform: rotate(18deg); } }
+  body.alerting main { height: calc(100% - 56px - 66px); }
   #overlay { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: flex; align-items: center;
     justify-content: center; flex-direction: column; font-size: 22px; z-index: 9; cursor: pointer; text-align: center; padding: 20px; }
   #overlay small { color: var(--muted); font-size: 15px; margin-top: 10px; }
@@ -71,7 +83,7 @@
     main { flex-direction: column; height: auto; }
     .col { border-right: 0; border-bottom: 1px solid var(--line); }
     .list { overflow: visible; }
-    .meta > :not(#clock) { display: none; }
+    .meta > :not(#clock):not(#bellbtn) { display: none; }
   }
 </style>
 </head>
@@ -79,16 +91,18 @@
 <header>
   <div class="brand"><span class="dot" id="dot"></span><span id="sname">Loading…</span></div>
   <div class="meta">
+    <button class="bellbtn" id="bellbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span>Bell on</span></button>
     <span class="conn" id="conn"><i></i><span>Connecting</span></span>
     <span id="clock">--:--</span>
   </div>
 </header>
+<div id="alert" role="alert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span id="alerttext">New order</span><small>Tap to stop</small></div>
 <main>
   <section class="col" data-s="new"><h2>New <span class="count" id="c-new">0</span></h2><div class="list" id="l-new"></div></section>
   <section class="col" data-s="picking"><h2>Picking <span class="count" id="c-picking">0</span></h2><div class="list" id="l-picking"></div></section>
   <section class="col" data-s="ready"><h2>Ready for pickup <span class="count" id="c-ready">0</span></h2><div class="list" id="l-ready"></div></section>
 </main>
-<div id="overlay">Tap to start<small>Turns on the new-order sound</small></div>
+<div id="overlay">Tap to start<small>Turns on the new-order bell</small></div>
 <div id="error"></div>
 <script>
 (function () {
@@ -113,20 +127,73 @@
   if (!STORE || !KEY) return fail('This screen link is missing its store or key. Copy the link from the master screen.');
 
   $('overlay').onclick = function () {
-    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+    unlockAudio();
     $('overlay').style.display = 'none';
   };
-  function chime() {
-    if (!audioCtx) return;
-    [0, 0.18, 0.36].forEach(function (t, i) {
+  // ---- bell ----
+  var BELL_KEY = 'storeBell:' + STORE, RING_EVERY_MS = 3000;
+  var bellOn = true, ringTimer = null, ringing = {}; // ringing: ticketId -> orderNumber
+  try { bellOn = localStorage.getItem(BELL_KEY) !== 'off'; } catch (e) {}
+
+  function unlockAudio() {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    } catch (e) {}
+  }
+  function ding(at, freq) {
+    // bell = fundamental + inharmonic partials with a fast attack and long decay
+    [[1, 0.5], [2.76, 0.22], [5.4, 0.1]].forEach(function (p) {
       var o = audioCtx.createOscillator(), g = audioCtx.createGain();
-      o.frequency.value = [880, 1175, 1480][i];
-      g.gain.setValueAtTime(0.25, audioCtx.currentTime + t);
-      g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + t + 0.16);
+      o.type = 'sine'; o.frequency.value = freq * p[0];
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(p[1], at + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + 1.2);
       o.connect(g); g.connect(audioCtx.destination);
-      o.start(audioCtx.currentTime + t); o.stop(audioCtx.currentTime + t + 0.17);
+      o.start(at); o.stop(at + 1.25);
     });
   }
+  function ringOnce() {
+    if (!audioCtx || !bellOn) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    var t = audioCtx.currentTime + 0.02;
+    ding(t, 1046); ding(t + 0.35, 1318); ding(t + 0.7, 1046);
+  }
+  function updateAlert() {
+    var ids = Object.keys(ringing);
+    var el = $('alert');
+    if (!ids.length) {
+      el.classList.remove('show'); document.body.classList.remove('alerting');
+      clearInterval(ringTimer); ringTimer = null;
+      return;
+    }
+    $('alerttext').textContent = ids.length === 1
+      ? 'New order #' + ringing[ids[0]]
+      : ids.length + ' new orders: #' + ids.map(function (k) { return ringing[k]; }).join(', #');
+    el.classList.add('show'); document.body.classList.add('alerting');
+    if (bellOn && !ringTimer) { ringOnce(); ringTimer = setInterval(ringOnce, RING_EVERY_MS); }
+    if (!bellOn) { clearInterval(ringTimer); ringTimer = null; }
+  }
+  function startRinging(t) { ringing[t.id] = t.orderNumber; updateAlert(); }
+  function stopRinging(id) {
+    if (id) delete ringing[id]; else ringing = {};
+    updateAlert();
+  }
+  function renderBell() {
+    var b = $('bellbtn');
+    b.classList.toggle('on', bellOn);
+    b.lastChild.textContent = bellOn ? 'Bell on' : 'Bell off';
+    b.setAttribute('aria-pressed', bellOn ? 'true' : 'false');
+  }
+  $('bellbtn').onclick = function () {
+    bellOn = !bellOn;
+    try { localStorage.setItem(BELL_KEY, bellOn ? 'on' : 'off'); } catch (e) {}
+    if (bellOn) unlockAudio();
+    clearInterval(ringTimer); ringTimer = null;
+    renderBell(); updateAlert();
+  };
+  $('alert').onclick = function () { unlockAudio(); stopRinging(); };
+  renderBell();
 
   function elapsed(iso) {
     var s = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 1000));
@@ -185,13 +252,16 @@
       .then(upsert, function () { b.disabled = false; alert('Could not update — check the connection.'); });
   });
 
+  var seen = {}, firstLoad = true;
   function upsert(t) {
-    var isNew = !tickets[t.id] && t.status === 'new';
+    var isNew = !seen[t.id] && t.status === 'new';
+    seen[t.id] = true;
     if (['new', 'picking', 'ready'].indexOf(t.status) === -1) delete tickets[t.id];
     else tickets[t.id] = t;
+    if (t.status !== 'new' && ringing[t.id]) stopRinging(t.id); // picked up by staff = acknowledged
     render();
     if (isNew) {
-      chime();
+      startRinging(t);
       var el = $('t-' + t.id); if (el) el.classList.add('flash');
     }
   }
@@ -199,8 +269,15 @@
   function load() {
     return api('/api/tickets?store=' + encodeURIComponent(STORE)).then(function (list) {
       tickets = {};
-      list.forEach(function (t) { if (['new', 'picking', 'ready'].indexOf(t.status) !== -1) tickets[t.id] = t; });
-      render();
+      list.forEach(function (t) {
+        var missed = !firstLoad && !seen[t.id] && t.status === 'new';
+        seen[t.id] = true;
+        if (['new', 'picking', 'ready'].indexOf(t.status) !== -1) tickets[t.id] = t;
+        if (missed) ringing[t.id] = t.orderNumber;
+        if (ringing[t.id] && t.status !== 'new') delete ringing[t.id];
+      });
+      firstLoad = false;
+      render(); updateAlert();
     });
   }
 
