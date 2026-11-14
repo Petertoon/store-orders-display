@@ -165,6 +165,126 @@ CREATE TABLE IF NOT EXISTS print_jobs (
 );
 CREATE INDEX IF NOT EXISTS print_jobs_agent ON print_jobs(agent_id, status);
 
+-- v2.2: Papa's Shop money: parts list, parts/charges on a job (with the phase they were added in), payments, invoices.
+CREATE TABLE IF NOT EXISTS shop_settings (
+  household_id INT PRIMARY KEY REFERENCES households(id) ON DELETE CASCADE,
+  tax_rate NUMERIC(6,3) NOT NULL DEFAULT 0,        -- percent, e.g. 8.25
+  invoice_header TEXT NOT NULL DEFAULT '',          -- address / phone lines under the shop name
+  invoice_footer TEXT NOT NULL DEFAULT ''           -- e.g. "Thank you! Payment due on pickup."
+);
+CREATE TABLE IF NOT EXISTS parts (
+  id SERIAL PRIMARY KEY,
+  household_id INT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  part_number TEXT,
+  barcode TEXT,
+  price_cents INT NOT NULL DEFAULT 0,
+  taxable BOOLEAN NOT NULL DEFAULT TRUE,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS parts_household ON parts (household_id, active);
+CREATE INDEX IF NOT EXISTS parts_barcode ON parts (household_id, barcode);
+ALTER TABLE todos ADD COLUMN IF NOT EXISTS customer_email TEXT;
+-- kind: part (from the parts list) or charge (typed: labor, fees). upcharge: added after the first phase.
+CREATE TABLE IF NOT EXISTS job_lines (
+  id SERIAL PRIMARY KEY,
+  todo_id INT NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL DEFAULT 'part',
+  part_id INT REFERENCES parts(id) ON DELETE SET NULL,
+  barcode TEXT,
+  name TEXT NOT NULL,
+  qty NUMERIC(10,2) NOT NULL DEFAULT 1,
+  unit_cents INT NOT NULL DEFAULT 0,
+  taxable BOOLEAN NOT NULL DEFAULT TRUE,
+  phase TEXT,
+  upcharge BOOLEAN NOT NULL DEFAULT FALSE,
+  added_by TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS job_lines_todo ON job_lines (todo_id);
+CREATE TABLE IF NOT EXISTS job_payments (
+  id SERIAL PRIMARY KEY,
+  todo_id INT NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
+  amount_cents INT NOT NULL,
+  method TEXT NOT NULL DEFAULT 'cash',
+  note TEXT,
+  added_by TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS job_payments_todo ON job_payments (todo_id);
+-- Phone scanner paired to a shop screen (by QR code, no sign-in on the phone). target = the job open on that screen.
+CREATE TABLE IF NOT EXISTS scan_pairs (
+  token TEXT PRIMARY KEY,
+  household_id INT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  target_todo_id INT REFERENCES todos(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_used TIMESTAMPTZ
+);
+
+-- v2.3: Papa's Shop customer list, invoice links (WhatsApp / text / email), QuickBooks (invoices + payments).
+CREATE TABLE IF NOT EXISTS customers (
+  id SERIAL PRIMARY KEY,
+  household_id INT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  phone TEXT,
+  email TEXT,
+  address TEXT,
+  notes TEXT,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  qbo_realm TEXT,
+  qbo_id TEXT,
+  qbo_sync_token TEXT,
+  qbo_hash TEXT,
+  qbo_error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS customers_household ON customers (household_id, active);
+ALTER TABLE todos ADD COLUMN IF NOT EXISTS customer_id INT REFERENCES customers(id) ON DELETE SET NULL;
+-- Private code for the customer's invoice link (/i/<code>); when the invoice was first sent.
+ALTER TABLE todos ADD COLUMN IF NOT EXISTS invoice_code TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS todos_invoice_code ON todos (invoice_code);
+ALTER TABLE todos ADD COLUMN IF NOT EXISTS invoice_sent_at TIMESTAMPTZ;
+-- QuickBooks: one connected company per shop account. Tokens are stored encrypted.
+CREATE TABLE IF NOT EXISTS qbo_connections (
+  household_id INT PRIMARY KEY REFERENCES households(id) ON DELETE CASCADE,
+  realm_id TEXT NOT NULL,
+  environment TEXT,
+  company_name TEXT,
+  access_token_enc TEXT,
+  refresh_token_enc TEXT,
+  access_expires_at TIMESTAMPTZ,
+  refresh_expires_at TIMESTAMPTZ,
+  settings JSONB NOT NULL DEFAULT '{}',
+  needs_reconnect BOOLEAN NOT NULL DEFAULT FALSE,
+  connected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_sync_at TIMESTAMPTZ,
+  last_sync_error TEXT
+);
+-- What's in QuickBooks for each job (invoice) and payment. qbo_realm = which QuickBooks company the id belongs to.
+ALTER TABLE todos ADD COLUMN IF NOT EXISTS qbo_realm TEXT;
+ALTER TABLE todos ADD COLUMN IF NOT EXISTS qbo_invoice_id TEXT;
+ALTER TABLE todos ADD COLUMN IF NOT EXISTS qbo_sync_token TEXT;
+ALTER TABLE todos ADD COLUMN IF NOT EXISTS qbo_hash TEXT;
+ALTER TABLE todos ADD COLUMN IF NOT EXISTS qbo_synced_at TIMESTAMPTZ;
+ALTER TABLE todos ADD COLUMN IF NOT EXISTS qbo_error TEXT;
+ALTER TABLE todos ADD COLUMN IF NOT EXISTS qbo_total_cents INT;
+ALTER TABLE job_payments ADD COLUMN IF NOT EXISTS qbo_realm TEXT;
+ALTER TABLE job_payments ADD COLUMN IF NOT EXISTS qbo_id TEXT;
+ALTER TABLE job_payments ADD COLUMN IF NOT EXISTS qbo_error TEXT;
+-- Things removed here that still have to be removed in QuickBooks (payments deleted, invoices voided).
+CREATE TABLE IF NOT EXISTS qbo_removals (
+  id SERIAL PRIMARY KEY,
+  household_id INT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  realm_id TEXT NOT NULL,
+  entity TEXT NOT NULL,
+  qbo_id TEXT NOT NULL,
+  label TEXT,
+  error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 ALTER TABLE todos DROP CONSTRAINT IF EXISTS todos_priority_check;
 ALTER TABLE todos ADD CONSTRAINT todos_priority_check CHECK (priority IN ('normal', 'high'));
 `;
