@@ -1,4 +1,2 @@
 node_modules/
-print-agent/node_modules/
-print-agent/config.json
 .env
