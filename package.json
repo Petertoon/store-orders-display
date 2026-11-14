@@ -1,7 +1,7 @@
 {
-  "name": "store-orders-display",
-  "version": "1.0.0",
-  "description": "Order display screens and receipt printers for multiple stores on one Wix Stores site",
+  "name": "homeboard",
+  "version": "2.1.0",
+  "description": "One program, three screens (Mama's To-Do, Papa's Shop job board, Store Orders) with an admin back end: accounts, on/off switches, tabs",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -10,8 +10,10 @@
     "node": ">=18"
   },
   "dependencies": {
-    "express": "^4.21.2",
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.6",
+    "express": "^4.19.2",
     "nodemailer": "^10.4.0",
-    "pg": "^8.13.1"
+    "pg": "^8.11.5"
   }
 }
