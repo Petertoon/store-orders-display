@@ -226,6 +226,7 @@ app.get('/api/admin/accounts', ...A, wrap(async (req, res) => {
       (SELECT count(*) FROM todos t WHERE t.household_id = h.id AND t.done_at IS NULL)::int AS open_items,
       (SELECT max(t.updated_at) FROM todos t WHERE t.household_id = h.id) AS last_activity,
       (SELECT row_to_json(s) FROM store_settings s WHERE s.household_id = h.id) AS store,
+      (SELECT CASE WHEN q.needs_reconnect THEN 'reconnect' ELSE COALESCE(q.company_name, 'connected') END FROM qbo_connections q WHERE q.household_id = h.id) AS qbo,
       (SELECT count(*) FROM tickets k JOIN store_settings s ON s.code = k.store_id
         WHERE s.household_id = h.id AND k.status IN ('new', 'picking', 'ready'))::int AS open_orders
     FROM households h ORDER BY lower(h.name), h.id`);
@@ -300,6 +301,40 @@ const board = require('./board')(app, { pool, wrap, fail, text, cleanColor, requ
 
 // ---------- Store Orders ----------
 const stores = require('./stores')(app, { pool, wrap, fail, text, cleanColor, requireLogin, requireSignIn, requireAdmin, notify: board.notify });
+
+// ---------- Papa's Shop: parts, charges, up-charges, payments, invoices, phone scanner ----------
+board.hooks.paymentRemoved = [];
+const shop = require('./shop')(app, { pool, wrap, fail, text, requireLogin, notify: board.notify, hooks: board.hooks });
+const qbo = require('./qbo')(app, { pool, wrap, fail, text, requireLogin, notify: board.notify, hooks: board.hooks, shop });
+
+// ---------- the Lokaalapp logo circle (top left of every screen), set on the admin page ----------
+const getSetting = async (k) => ((await pool.query('SELECT value FROM app_settings WHERE key=$1', [k])).rows[0] || {}).value || '';
+const setSetting = (k, v) => (v ? pool.query('INSERT INTO app_settings (key, value) VALUES ($1,$2) ON CONFLICT (key) DO UPDATE SET value=$2', [k, v])
+  : pool.query('DELETE FROM app_settings WHERE key=$1', [k]));
+app.get('/api/brand', wrap(async (req, res) => {
+  const logo = await getSetting('brand_logo');
+  res.set('Cache-Control', 'no-cache');
+  res.json({ has_logo: !!logo, v: logo ? crypto.createHash('sha1').update(logo).digest('hex').slice(0, 10) : '',
+    link: await getSetting('brand_link'), title: await getSetting('brand_title') });
+}));
+app.get('/brand-logo', wrap(async (req, res) => {
+  const m = /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec(await getSetting('brand_logo'));
+  if (!m) return res.status(404).end();
+  res.set('Cache-Control', 'public, max-age=86400').type(m[1]).send(Buffer.from(m[2], 'base64'));
+}));
+app.put('/api/admin/brand', requireSignIn, requireAdmin, wrap(async (req, res) => {
+  const logo = req.body.logo;
+  if (logo !== undefined) {
+    if (logo && !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(logo)) fail(400, 'The logo must be a PNG, JPG or WebP picture');
+    if (logo && logo.length > 400000) fail(400, 'That picture is too big');
+    await setSetting('brand_logo', logo || '');
+  }
+  let link = text(req.body.link, 'Link', { required: false, max: 500 });
+  if (link && !/^https?:\/\//i.test(link)) link = 'https://' + link;
+  await setSetting('brand_link', link);
+  await setSetting('brand_title', text(req.body.title, 'Name', { required: false, max: 80 }));
+  res.json({ ok: true });
+}));
 
 // ---------- pages ----------
 const page = (f) => (req, res) => res.sendFile(path.join(__dirname, 'public', f));
