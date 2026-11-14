@@ -1,6 +1,7 @@
+[HANDOVER (7).md](https://github.com/user-attachments/files/34863594/HANDOVER.7.md)
 # HomeBoard — Build Handover
 
-Last updated: 2026-11-14 · **HomeBoard v2.1.0** · built from the ContractorPOS v1.7.1 job board, with
+Last updated: 2026-11-14 · **HomeBoard v2.3.0** · built from the ContractorPOS v1.7.1 job board, with
 `Petertoon/store-orders-display` (commit ba882e3) moved in. Attach this file and the live repo files (or the zip) to a new chat.
 
 ## What it is
@@ -12,6 +13,31 @@ One program, three kinds of screens, one admin back end (`/admin`, tabs per scre
   (code, SKU prefix, color, printer, Pi name, emails) instead of `stores.json`. The admin Store Orders tab replaces `/master`.
 
 Each account uses one screen. `/` serves `store.html` for store accounts and `board.html` for the others.
+
+## Papa's Shop money (v2.2)
+
+`shop.js` + `public/shop-ui.js` + `public/scan.html`. Tables: `shop_settings` (tax_rate %, invoice_header, invoice_footer),
+`parts`, `job_lines` (kind part/charge, qty NUMERIC, unit_cents, taxable, phase, upcharge), `job_payments`, `scan_pairs`
+(token → account + target job), `todos.customer_email`. Up-charge = added while the job isn't in the first column (editable per line).
+Tax = round(taxable subtotal × rate). Phone scanner: shop screen keeps a pair token (localStorage `hbPair:<account>`), tells the
+server which job is open (`/api/shop/pair/target`); the phone (`/scan#token`, no sign-in) scans into that job. Camera reader:
+`barcode-detector` + `zxing-wasm` served at `/vendor/…` (same as ContractorPOS). Invoice: `/invoice/:id` (signed in), email via
+`email.sendMail`. Decided: payments recorded (no card processing), tax per shop, prices only (no stock counts).
+
+## v2.3: customers, invoice sending, QuickBooks, logo
+
+- `customers` table (+ `todos.customer_id`); `shop.ensureCustomer` links a job to a customer by phone/email/name or adds one.
+- Invoice link: `todos.invoice_code` → public `/i/<code>`; `/api/shop/jobs/:id/share` (link + message), `/sent` (whatsapp, text,
+  print, mailapp) sets `invoice_sent_at` and history. WhatsApp = `https://wa.me/1XXXXXXXXXX?text=…`; text = `sms:…?&body=…`.
+- `qbo.js` (OAuth/token code from ContractorPOS). Tables `qbo_connections` (settings: income_account_id, deposit_account_id,
+  items cache), `qbo_removals`; ids on `customers`, `todos` (qbo_invoice_id, qbo_hash = content hash), `job_payments`.
+  Items "Shop Parts" and "Shop Labor & Charges" (Service) on the chosen income account. Tax: lines TAX/NON +
+  TxnTaxDetail.TotalTax; if QuickBooks' total differs the ticket says so (it figured tax itself). Hooks from board.js:
+  `beforeDelete`, `changed`, `paymentRemoved`. Disconnect keeps settings for the same company (`app_settings qbo_last:<id>`).
+  Tested against a stand-in Intuit API (`tests/fakeqbo.js`; env `QBO_AUTH_URL`, `QBO_TOKEN_URL`, `QBO_API_BASE`); still to do:
+  a real sandbox run.
+- Logo: `app_settings` brand_logo (data URL, 256 px), brand_link, brand_title; `/api/brand`, `/brand-logo`, `PUT /api/admin/brand`;
+  `public/brand.js` fills every `<span data-brand>`.
 
 ## Store Orders: what stayed the same
 
@@ -60,6 +86,10 @@ Make store accounts with the same SKU prefixes → test order → change the Wix
 "Copy Wix webhook address" → update each Pi's config.json (server, agentId, agentKey, storeId) → suspend the old service.
 
 ## Ideas for later
+
+Papa's Shop: stock counts, quotes/estimates the customer approves, a discount line, QuickBooks (ContractorPOS has qbo.js),
+a public invoice link for customers.
+
 
 Board features on the store screen behind switches (pick list = items as checklist, notes with 🎤, custom columns) ·
 site name on tickets when a second Wix site is connected · photos on to-dos/jobs · repeating to-dos · reminders.
