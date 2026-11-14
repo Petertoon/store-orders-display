@@ -1,6 +1,6 @@
 {
   "name": "homeboard",
-  "version": "2.1.0",
+  "version": "2.3.0",
   "description": "One program, three screens (Mama's To-Do, Papa's Shop job board, Store Orders) with an admin back end: accounts, on/off switches, tabs",
   "main": "server.js",
   "scripts": {
@@ -10,10 +10,13 @@
     "node": ">=18"
   },
   "dependencies": {
+    "barcode-detector": "2.3.1",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.6",
     "express": "^4.19.2",
     "nodemailer": "^10.4.0",
-    "pg": "^8.11.5"
+    "pg": "^8.11.5",
+    "qrcode": "^1.5.4",
+    "zxing-wasm": "1.3.4"
   }
 }
