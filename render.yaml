@@ -1,15 +1,11 @@
 services:
   - type: web
-    name: store-orders-display
+    name: homeboard
     runtime: node
-    plan: starter            # paid: free tier sleeps and misses orders
+    plan: starter            # paid: the free plan sleeps and would miss Wix orders
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /health
     envVars:
-      - key: MASTER_KEY
-        generateValue: true
-      - key: WEBHOOK_TOKEN
-        generateValue: true
       - key: DATABASE_URL
         sync: false
