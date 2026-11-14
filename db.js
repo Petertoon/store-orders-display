@@ -1,174 +1,187 @@
-// Storage: Postgres when DATABASE_URL is set, otherwise in-memory (local testing only —
-// in-memory data is lost on every restart/deploy).
-const ACTIVE = ['new', 'picking', 'ready'];
-const RESEND_AFTER_MS = 60 * 1000; // a job the agent took but never confirmed is retried
+// Database connection and schema. Tables are created automatically on startup.
+// Keep schema changes additive (ADD COLUMN IF NOT EXISTS): the whole schema runs as one transaction,
+// so one bad statement stops the server from starting (Render keeps the last good version running).
+const { Pool, types } = require('pg');
+// Keep plain dates (like a due date) as "2026-11-26" instead of a time-zone-shifted timestamp.
+types.setTypeParser(1082, (v) => v);
 
-let pool = null;
-const mem = { tickets: new Map(), jobs: [], nextJobId: 1 };
+if (!process.env.DATABASE_URL) {
+  console.error('DATABASE_URL is not set. Add it in Render > Environment.');
+  process.exit(1);
+}
+
+const useSSL = !/localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL) && process.env.PGSSLMODE !== 'disable';
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: useSSL ? { rejectUnauthorized: false } : false,
+});
+
+const schema = `
+-- A house (household). Everything else belongs to one house.
+CREATE TABLE IF NOT EXISTS households (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- The login for a house (one shared email + password).
+CREATE TABLE IF NOT EXISTS logins (
+  id SERIAL PRIMARY KEY,
+  household_id INT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  token TEXT PRIMARY KEY,
+  login_id INT NOT NULL REFERENCES logins(id) ON DELETE CASCADE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Family members: pick "who are you" on each screen; to-dos can be for one of them.
+CREATE TABLE IF NOT EXISTS members (
+  id SERIAL PRIMARY KEY,
+  household_id INT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  color TEXT NOT NULL DEFAULT '#3b82f6',
+  position INT NOT NULL DEFAULT 0,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Board columns. Colors left empty use the standard dark look.
+-- buttons: [{label, enabled, action: mark/next, color, place: top/middle/bottom}]
+CREATE TABLE IF NOT EXISTS board_columns (
+  id SERIAL PRIMARY KEY,
+  household_id INT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  color TEXT NOT NULL DEFAULT '#2563c9',
+  text_color TEXT,
+  bg_color TEXT,
+  card_color TEXT,
+  card_text_color TEXT,
+  position INT NOT NULL DEFAULT 0,
+  buttons JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS todos (
+  id SERIAL PRIMARY KEY,
+  household_id INT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  column_id INT REFERENCES board_columns(id) ON DELETE SET NULL,
+  title TEXT NOT NULL DEFAULT '',
+  notes TEXT NOT NULL DEFAULT '',
+  member_id INT REFERENCES members(id) ON DELETE SET NULL,
+  due_date DATE,
+  priority TEXT NOT NULL DEFAULT 'normal',
+  status_label TEXT,
+  column_entered_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  done_at TIMESTAMPTZ,
+  created_by INT REFERENCES members(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS todos_household ON todos (household_id, column_id);
+
+-- Checklist steps on a to-do.
+CREATE TABLE IF NOT EXISTS todo_steps (
+  id SERIAL PRIMARY KEY,
+  todo_id INT NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
+  done BOOLEAN NOT NULL DEFAULT FALSE,
+  position INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS todo_steps_todo ON todo_steps (todo_id);
+
+-- Everything that happens to a to-do, with who and when.
+CREATE TABLE IF NOT EXISTS todo_history (
+  id SERIAL PRIMARY KEY,
+  todo_id INT NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
+  member_id INT REFERENCES members(id) ON DELETE SET NULL,
+  member_name TEXT,
+  action TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS todo_history_todo ON todo_history (todo_id);
+
+-- v2: one program, several kinds of screens. An account (household row) uses one screen:
+-- 'todo' (Mama's To-Do), 'shop' (Papa's Shop job board) or 'store' (Store Orders), and can be switched off.
+ALTER TABLE households ADD COLUMN IF NOT EXISTS screen TEXT NOT NULL DEFAULT 'todo';
+ALTER TABLE households ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE households DROP CONSTRAINT IF EXISTS households_screen_check;
+ALTER TABLE households ADD CONSTRAINT households_screen_check CHECK (screen IN ('todo', 'shop', 'store'));
+-- The admin (platform owner) has a login with no account of its own and can open any account's screen.
+ALTER TABLE logins ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE logins ALTER COLUMN household_id DROP NOT NULL;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS acting_household_id INT REFERENCES households(id) ON DELETE SET NULL;
+-- Shop jobs: a job number per account and the customer.
+ALTER TABLE todos ADD COLUMN IF NOT EXISTS job_number INT;
+ALTER TABLE todos ADD COLUMN IF NOT EXISTS customer_name TEXT;
+ALTER TABLE todos ADD COLUMN IF NOT EXISTS customer_phone TEXT;
+ALTER TABLE todos ADD COLUMN IF NOT EXISTS job_address TEXT;
+
+-- v2.1: Store Orders (moved in from store-orders-display).
+CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+-- A Store Orders account's store: code (used as storeId by the print agent), SKU prefix, color, printer, Pi, emails.
+CREATE TABLE IF NOT EXISTS store_settings (
+  household_id INT PRIMARY KEY REFERENCES households(id) ON DELETE CASCADE,
+  code TEXT NOT NULL UNIQUE,
+  sku_prefix TEXT NOT NULL,
+  color TEXT NOT NULL DEFAULT '#f59e0b',
+  printer BOOLEAN NOT NULL DEFAULT FALSE,
+  agent_id TEXT,
+  emails TEXT NOT NULL DEFAULT ''
+);
+CREATE UNIQUE INDEX IF NOT EXISTS store_settings_prefix ON store_settings (upper(sku_prefix));
+-- One ticket per store per order (same as store-orders-display).
+CREATE TABLE IF NOT EXISTS tickets (
+  id TEXT PRIMARY KEY,
+  order_id TEXT NOT NULL,
+  order_number TEXT,
+  store_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'new',
+  customer JSONB NOT NULL DEFAULT '{}',
+  items JSONB NOT NULL DEFAULT '[]',
+  note TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS tickets_store_status ON tickets(store_id, status);
+CREATE INDEX IF NOT EXISTS tickets_order ON tickets(order_id);
+CREATE TABLE IF NOT EXISTS print_jobs (
+  id SERIAL PRIMARY KEY,
+  ticket_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  attempts INT NOT NULL DEFAULT 0,
+  error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  sent_at TIMESTAMPTZ,
+  done_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS print_jobs_agent ON print_jobs(agent_id, status);
+
+ALTER TABLE todos DROP CONSTRAINT IF EXISTS todos_priority_check;
+ALTER TABLE todos ADD CONSTRAINT todos_priority_check CHECK (priority IN ('normal', 'high'));
+`;
 
 async function init() {
-  if (!process.env.DATABASE_URL) {
-    console.warn('[db] DATABASE_URL not set — using in-memory storage (testing only)');
-    return;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock(777001)');
+    await client.query(schema);
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
   }
-  const { Pool } = require('pg');
-  pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.PGSSL === 'off' ? false : { rejectUnauthorized: false },
-  });
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS tickets (
-      id TEXT PRIMARY KEY,
-      order_id TEXT NOT NULL,
-      order_number TEXT,
-      store_id TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'new',
-      customer JSONB NOT NULL DEFAULT '{}',
-      items JSONB NOT NULL DEFAULT '[]',
-      note TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
-    CREATE INDEX IF NOT EXISTS tickets_store_status ON tickets(store_id, status);
-    CREATE INDEX IF NOT EXISTS tickets_order ON tickets(order_id);
-    CREATE TABLE IF NOT EXISTS print_jobs (
-      id SERIAL PRIMARY KEY,
-      ticket_id TEXT NOT NULL,
-      store_id TEXT NOT NULL,
-      agent_id TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending',
-      attempts INT NOT NULL DEFAULT 0,
-      error TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      sent_at TIMESTAMPTZ,
-      done_at TIMESTAMPTZ
-    );
-    CREATE INDEX IF NOT EXISTS print_jobs_agent ON print_jobs(agent_id, status);
-  `);
-  console.log('[db] Postgres ready');
 }
 
-const rowToTicket = (r) => ({
-  id: r.id, orderId: r.order_id, orderNumber: r.order_number, storeId: r.store_id,
-  status: r.status, customer: r.customer, items: r.items, note: r.note,
-  createdAt: new Date(r.created_at).toISOString(), updatedAt: new Date(r.updated_at).toISOString(),
-});
-const rowToJob = (r) => ({
-  id: r.id, ticketId: r.ticket_id, storeId: r.store_id, agentId: r.agent_id, status: r.status,
-  attempts: r.attempts, error: r.error,
-  createdAt: r.created_at && new Date(r.created_at).toISOString(),
-  doneAt: r.done_at && new Date(r.done_at).toISOString(),
-});
-
-// Returns true if inserted, false if it already existed (duplicate webhook).
-async function insertTicket(t) {
-  if (!pool) {
-    if (mem.tickets.has(t.id)) return false;
-    const now = new Date().toISOString();
-    mem.tickets.set(t.id, { ...t, status: 'new', createdAt: now, updatedAt: now });
-    return true;
-  }
-  const r = await pool.query(
-    `INSERT INTO tickets (id, order_id, order_number, store_id, customer, items, note)
-     VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING RETURNING id`,
-    [t.id, t.orderId, t.orderNumber, t.storeId, JSON.stringify(t.customer), JSON.stringify(t.items), t.note || null]
-  );
-  return r.rowCount === 1;
-}
-
-async function getTicket(id) {
-  if (!pool) return mem.tickets.get(id) || null;
-  const r = await pool.query('SELECT * FROM tickets WHERE id=$1', [id]);
-  return r.rows[0] ? rowToTicket(r.rows[0]) : null;
-}
-
-// Active tickets plus anything finished in the last 12 hours.
-async function listTickets(storeId) {
-  const since = Date.now() - 12 * 3600 * 1000;
-  if (!pool) {
-    return [...mem.tickets.values()]
-      .filter((t) => (!storeId || t.storeId === storeId) &&
-        (ACTIVE.includes(t.status) || Date.parse(t.updatedAt) > since))
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  }
-  const r = await pool.query(
-    `SELECT * FROM tickets WHERE ($1::text IS NULL OR store_id=$1)
-       AND (status = ANY($2) OR updated_at > to_timestamp($3/1000.0))
-     ORDER BY created_at`,
-    [storeId || null, ACTIVE, since]
-  );
-  return r.rows.map(rowToTicket);
-}
-
-async function setStatus(id, status) {
-  if (!pool) {
-    const t = mem.tickets.get(id);
-    if (!t) return null;
-    t.status = status; t.updatedAt = new Date().toISOString();
-    return t;
-  }
-  const r = await pool.query(
-    'UPDATE tickets SET status=$2, updated_at=now() WHERE id=$1 RETURNING *', [id, status]);
-  return r.rows[0] ? rowToTicket(r.rows[0]) : null;
-}
-
-async function ticketsForOrder(orderId) {
-  if (!pool) return [...mem.tickets.values()].filter((t) => t.orderId === orderId);
-  const r = await pool.query('SELECT * FROM tickets WHERE order_id=$1', [orderId]);
-  return r.rows.map(rowToTicket);
-}
-
-async function createPrintJob(ticket, agentId) {
-  if (!pool) {
-    const job = { id: mem.nextJobId++, ticketId: ticket.id, storeId: ticket.storeId, agentId,
-      status: 'pending', attempts: 0, error: null, createdAt: new Date().toISOString(), doneAt: null };
-    mem.jobs.push(job);
-    return job;
-  }
-  const r = await pool.query(
-    'INSERT INTO print_jobs (ticket_id, store_id, agent_id) VALUES ($1,$2,$3) RETURNING *',
-    [ticket.id, ticket.storeId, agentId]);
-  return rowToJob(r.rows[0]);
-}
-
-// Hands the agent its pending jobs (and re-sends ones it took but never confirmed).
-async function claimJobs(agentId) {
-  if (!pool) {
-    const now = Date.now();
-    const jobs = mem.jobs.filter((j) => j.agentId === agentId &&
-      (j.status === 'pending' || (j.status === 'sent' && now - j.sentAt > RESEND_AFTER_MS)));
-    jobs.forEach((j) => { j.status = 'sent'; j.sentAt = now; j.attempts++; });
-    return jobs.map((j) => ({ ...j }));
-  }
-  const r = await pool.query(
-    `UPDATE print_jobs SET status='sent', sent_at=now(), attempts=attempts+1
-     WHERE id IN (SELECT id FROM print_jobs WHERE agent_id=$1 AND
-       (status='pending' OR (status='sent' AND sent_at < now() - ($2 || ' milliseconds')::interval))
-       ORDER BY id LIMIT 20)
-     RETURNING *`,
-    [agentId, String(RESEND_AFTER_MS)]);
-  return r.rows.map(rowToJob);
-}
-
-async function finishJob(id, agentId, ok, error) {
-  const status = ok ? 'done' : 'failed';
-  if (!pool) {
-    const j = mem.jobs.find((x) => x.id === Number(id) && x.agentId === agentId);
-    if (!j) return null;
-    j.status = status; j.error = ok ? null : String(error || 'unknown error'); j.doneAt = new Date().toISOString();
-    return { ...j };
-  }
-  const r = await pool.query(
-    `UPDATE print_jobs SET status=$3, error=$4, done_at=now() WHERE id=$1 AND agent_id=$2 RETURNING *`,
-    [Number(id), agentId, status, ok ? null : String(error || 'unknown error')]);
-  return r.rows[0] ? rowToJob(r.rows[0]) : null;
-}
-
-async function recentJobs(limit = 50) {
-  if (!pool) return mem.jobs.slice(-limit).reverse().map((j) => ({ ...j }));
-  const r = await pool.query('SELECT * FROM print_jobs ORDER BY id DESC LIMIT $1', [limit]);
-  return r.rows.map(rowToJob);
-}
-
-module.exports = { init, insertTicket, getTicket, listTickets, setStatus, ticketsForOrder,
-  createPrintJob, claimJobs, finishJob, recentJobs, ACTIVE };
+module.exports = { pool, init };
