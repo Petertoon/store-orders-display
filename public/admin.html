@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%9B%A0%3C/text%3E%3C/svg%3E">
 <style>
   .top { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: #0f172a; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-  .top .brand { font-weight: 800; font-size: 20px; }
+  .top .brand { font-weight: 800; font-size: 20px; display: flex; align-items: center; }
   .top .brand small { color: var(--muted); font-weight: 600; font-size: 14px; margin-left: 6px; }
   .top .spacer { flex: 1; }
   .top .who { color: var(--muted); font-size: 14px; }
@@ -75,9 +75,10 @@
 </head>
 <body>
 <header class="top">
-  <div class="brand">🛠 <span id="appName">Admin</span><small>Admin</small></div>
+  <div class="brand"><span data-brand></span>🛠 <span id="appName">Admin</span><small>Admin</small></div>
   <div class="spacer"></div>
   <span class="who" id="who"></span>
+  <button class="ghost" id="logoBtn" title="The logo circle in the top-left corner of every screen">Logo</button>
   <button class="ghost" id="pwBtn">Change password</button>
   <button class="ghost" onclick="logout()">Sign out</button>
 </header>
@@ -99,6 +100,7 @@
 </main>
 <div class="modal-back" id="m"><form class="modal" id="mBody" onsubmit="return false"></form></div>
 <script src="/app.js"></script>
+<script src="/brand.js"></script>
 <script>
 let data = null, tab = 'todo';
 const ORDER = ['todo', 'shop', 'store'];
@@ -135,7 +137,7 @@ function render() {
   $('#list').innerHTML = list.map((a) => `<div class="acct ${a.active ? '' : 'off'}" data-id="${a.id}">
       <div class="head"><b title="${esc(a.name)}">${esc(a.name)}</b><span class="badge">${a.active ? 'ON' : 'OFF'}</span>
         <label class="sw" title="Switch this account on or off"><input type="checkbox" data-sw ${a.active ? 'checked' : ''}><i></i></label></div>
-      <div class="meta">✉ ${esc(a.email || 'no sign-in')}<br>${a.screen === 'store' ? storeMeta(a) : `👥 ${a.people} ${a.people === 1 ? 'person' : 'people'} · ${a.open_items} open · last change ${when(a.last_activity)}`}</div>
+      <div class="meta">✉ ${esc(a.email || 'no sign-in')}<br>${a.screen === 'store' ? storeMeta(a) : `👥 ${a.people} ${a.people === 1 ? 'person' : 'people'} · ${a.open_items} open · last change ${when(a.last_activity)}`}${a.screen === 'shop' ? `<br><span class="pill ${a.qbo === 'reconnect' ? 'bad' : a.qbo ? 'ok' : ''}">QuickBooks: ${a.qbo === 'reconnect' ? 'needs reconnecting' : a.qbo ? esc(a.qbo) : 'not connected'}</span>` : ''}</div>
       <div class="btns"><button class="primary" data-open>Open screen ▸</button><button data-edit>Edit</button></div></div>`).join('')
     || `<div class="empty">No ${esc(s.label)} accounts${q ? ' match' : ' yet'}. ${q ? '' : 'Tap "+ New account" to make one.'}</div>`;
   history.replaceState(null, '', '#' + tab);
@@ -297,6 +299,40 @@ function editDialog(a) {
     run(async () => { await api('/api/admin/accounts/' + a.id, undefined, 'DELETE'); toast('Account deleted'); await load(); });
   };
 }
+// The logo circle in the top-left corner of every screen, and where tapping it goes (your Lokaalapp).
+$('#logoBtn').onclick = async () => {
+  const b = await api('/api/brand');
+  let logo; // undefined = unchanged, '' = remove, data URL = new picture
+  const f = openModal(`<h2>Logo circle</h2>
+    <p class="muted" style="margin:0 0 10px;font-size:14px">Shows in the top-left corner of every screen (to-do, shop, store, sign-in, phone scanner and customer invoices). Tapping it opens your link.</p>
+    <div style="display:flex;align-items:center;gap:14px"><div id="lprev" style="width:86px;height:86px;border-radius:50%;overflow:hidden;border:3px solid #7ac143;background:#111;flex:none">
+      ${b.has_logo ? `<img src="/brand-logo?v=${esc(b.v)}" style="width:100%;height:100%;object-fit:cover">` : ''}</div>
+      <div><button type="button" id="lpick" class="primary">Choose picture</button> <button type="button" id="lrem" ${b.has_logo ? '' : 'hidden'}>Remove</button>
+      <div class="muted" style="font-size:13px;margin-top:6px">Square works best. It's cropped to a circle.</div></div></div>
+    <input type="file" id="lfile" accept="image/*" hidden>
+    <label>Link when tapped</label><input name="link" value="${esc(b.link || '')}" placeholder="https://your-lokaalapp-link">
+    <label>Name (shown when you point at it)</label><input name="title" maxlength="80" value="${esc(b.title || '')}" placeholder="Lokaalapp">
+    <div class="actions"><button type="button" onclick="closeModal()">Cancel</button><button class="primary" id="lsave">Save</button></div>`);
+  $('#lpick').onclick = () => $('#lfile').click();
+  $('#lrem').onclick = () => { logo = ''; $('#lprev').innerHTML = ''; $('#lrem').hidden = true; };
+  $('#lfile').onchange = async () => {
+    const file = $('#lfile').files[0]; if (!file) return;
+    try {
+      const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => bad(new Error('That file is not a picture')); i.src = URL.createObjectURL(file); });
+      // Square crop from the middle, 256 x 256.
+      const c = document.createElement('canvas'); c.width = c.height = 256;
+      const s = Math.min(img.width, img.height);
+      c.getContext('2d').drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, 256, 256);
+      logo = c.toDataURL('image/png');
+      if (logo.length > 380000) logo = c.toDataURL('image/jpeg', 0.88);
+      $('#lprev').innerHTML = `<img src="${logo}" style="width:100%;height:100%;object-fit:cover">`; $('#lrem').hidden = false;
+    } catch (e) { toast(e.message, 'bad'); }
+  };
+  $('#lsave').onclick = () => run(async () => {
+    await api('/api/admin/brand', { ...(logo !== undefined ? { logo } : {}), link: f.link.value, title: f.title.value }, 'PUT');
+    closeModal(); toast('Logo saved'); Brand.refresh();
+  });
+};
 $('#pwBtn').onclick = () => {
   const f = openModal(`<h2>Change your admin password</h2>
     <label>Current password</label><input name="cur" type="password" autocomplete="current-password" required>
