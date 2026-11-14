@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%9B%A0%3C/text%3E%3C/svg%3E">
+<style>
+  .top { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: #0f172a; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .top .brand { font-weight: 800; font-size: 20px; }
+  .top .brand small { color: var(--muted); font-weight: 600; font-size: 14px; margin-left: 6px; }
+  .top .spacer { flex: 1; }
+  .top .who { color: var(--muted); font-size: 14px; }
+  .tabs { display: flex; gap: 6px; padding: 12px 16px 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
+  .tabs button { background: transparent; border-radius: 10px 10px 0 0; padding: 12px 18px; font-size: 17px; color: var(--muted); border-bottom: 3px solid transparent; white-space: nowrap; display: flex; gap: 8px; align-items: center; }
+  .tabs button.on { color: var(--ink); background: var(--panel); border-bottom-color: var(--accent); }
+  .tabs .n { background: #24345a; color: #c9d7f5; border-radius: 99px; padding: 1px 9px; font-size: 13px; }
+  main { padding: 16px; max-width: 1300px; }
+  .bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .bar h2 { margin: 0; font-size: 20px; flex: 1; }
+  .bar input { width: 240px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+  .acct { background: var(--panel); border-radius: 12px; padding: 14px; border-left: 5px solid var(--ok); display: flex; flex-direction: column; gap: 8px; }
+  .acct.off { border-left-color: #64748b; opacity: .72; }
+  .acct .head { display: flex; align-items: center; gap: 10px; }
+  .acct .head b { flex: 1; font-size: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .acct .meta { color: var(--muted); font-size: 14px; line-height: 1.5; }
+  .acct .btns { display: flex; gap: 8px; margin-top: 4px; }
+  .acct .btns button { flex: 1; white-space: nowrap; }
+  .badge { font-size: 12px; font-weight: 800; border-radius: 6px; padding: 2px 7px; background: #14532d; color: #bbf7d0; }
+  .acct.off .badge { background: #3f3f46; color: #e4e4e7; }
+  /* on/off switch */
+  .sw { position: relative; width: 54px; height: 30px; flex: none; }
+  .sw input { opacity: 0; width: 100%; height: 100%; margin: 0; position: absolute; cursor: pointer; z-index: 1; }
+  .sw i { position: absolute; inset: 0; background: #475569; border-radius: 99px; transition: .15s; }
+  .sw i::after { content: ''; position: absolute; left: 3px; top: 3px; width: 24px; height: 24px; background: #fff; border-radius: 50%; transition: .15s; }
+  .sw input:checked + i { background: var(--ok); }
+  .sw input:checked + i::after { left: 27px; }
+  .empty { color: var(--muted); padding: 30px 0; text-align: center; }
+  .note { background: #1d2a45; border-radius: 10px; padding: 10px 14px; color: #c9d7f5; font-size: 14px; margin-bottom: 14px; }
+  .names { display: grid; gap: 6px; }
+  .names div { display: flex; gap: 6px; }
+  .names button { padding: 6px 12px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .pwrow { display: flex; gap: 6px; }
+  .pwrow button { white-space: nowrap; }
+  /* Store Orders control (was the master screen) */
+  .sp { margin-bottom: 18px; }
+  .sp .tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  .sp .live { color: var(--muted); font-size: 14px; } .sp .live.ok { color: var(--ok); }
+  .sp .cols { display: grid; grid-template-columns: 1.5fr 1fr; gap: 12px; }
+  .box { background: var(--panel); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
+  .box h3 { margin: 0 0 8px; font-size: 13px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; }
+  .alertbox { background: #3a1414; border: 1px solid #ef4444; color: #fecaca; border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .filters button { padding: 5px 12px; font-size: 13px; border-radius: 99px; border: 1px solid transparent; }
+  .filters button.on { border-color: var(--ink); }
+  .orders { max-height: 60vh; overflow-y: auto; }
+  .order { background: var(--card); border-radius: 10px; padding: 9px 12px; margin-bottom: 8px; }
+  .order .top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .order ul { margin: 6px 0 0; padding-left: 18px; color: #c9d1de; font-size: 14px; }
+  .row { display: flex; align-items: center; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .row:last-child { border-bottom: 0; }
+  .grow { flex: 1; min-width: 140px; }
+  .pill { font-size: 12px; padding: 3px 8px; border-radius: 99px; background: #2d3340; white-space: nowrap; }
+  .pill.ok { background: #123320; color: #86efac; } .pill.bad { background: #3a1414; color: #fca5a5; }
+  .pill.new { background: #13284a; color: #93c5fd; } .pill.picking { background: #3a2a0b; color: #fcd34d; } .pill.ready { background: #123320; color: #86efac; }
+  .sm { padding: 5px 10px; font-size: 12.5px; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; word-break: break-all; }
+  .sdot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .storeset { border: 1px solid var(--line); border-radius: 10px; padding: 4px 12px 12px; margin-top: 12px; }
+  @media (max-width: 900px) { .sp .cols { grid-template-columns: 1fr; } }
+  @media (max-width: 600px) { .tabs { flex-wrap: wrap; padding: 8px 8px 0; gap: 2px; } .tabs button { padding: 9px 10px; font-size: 14.5px; } .bar input { width: 100%; } .two { grid-template-columns: 1fr; } .top .who { width: 100%; order: 5; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">🛠 <span id="appName">Admin</span><small>Admin</small></div>
+  <div class="spacer"></div>
+  <span class="who" id="who"></span>
+  <button class="ghost" id="pwBtn">Change password</button>
+  <button class="ghost" onclick="logout()">Sign out</button>
+</header>
+<nav class="tabs" id="tabs"></nav>
+<main>
+  <div class="bar"><h2 id="tabTitle"></h2><input id="search" type="search" placeholder="Search accounts…"><button class="primary" id="newBtn">+ New account</button></div>
+  <div id="tabNote"></div>
+  <div class="sp" id="storePanel" hidden>
+    <div class="alertbox" id="unassigned" hidden></div>
+    <div class="tools"><button class="primary" id="testOrder">Send test order</button><button id="copyHook">Copy Wix webhook address</button>
+      <span class="live" id="live">● connecting</span></div>
+    <div class="cols">
+      <div class="box"><h3>All orders <span id="ocount"></span></h3><div class="filters" id="filters"></div><div class="orders" id="orders"></div></div>
+      <div><div class="box"><h3>Print agents (Raspberry Pi)</h3><div id="agents"></div></div>
+        <div class="box"><h3>Recent print jobs</h3><div id="jobs"></div></div></div>
+    </div>
+  </div>
+  <div class="grid" id="list"></div>
+</main>
+<div class="modal-back" id="m"><form class="modal" id="mBody" onsubmit="return false"></form></div>
+<script src="/app.js"></script>
+<script>
+let data = null, tab = 'todo';
+const ORDER = ['todo', 'shop', 'store'];
+const when = (d) => (d ? new Date(d).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'never');
+async function run(fn) { try { return await fn(); } catch (e) { toast(e.message, 'bad'); return null; } }
+function openModal(html) { const mb = $('#mBody'); mb.onclick = mb.oninput = null; mb.innerHTML = html; $('#m').classList.add('open'); return mb; }
+function closeModal() { $('#m').classList.remove('open'); $('#mBody').innerHTML = ''; }
+$('#m').addEventListener('mousedown', (e) => { if (e.target.id === 'm') closeModal(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+function ask(q, yes = 'Yes', danger = false) {
+  return new Promise((resolve) => {
+    const f = openModal(`<h2 style="font-size:20px">${esc(q)}</h2><div class="actions"><button type="button" data-a="0">Cancel</button><button type="button" class="${danger ? 'danger' : 'primary'}" data-a="1">${esc(yes)}</button></div>`);
+    f.onclick = (e) => { const b = e.target.closest('[data-a]'); if (!b) return; closeModal(); resolve(b.dataset.a === '1'); };
+  });
+}
+const makePassword = () => { const c = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789'; let s = ''; const r = crypto.getRandomValues(new Uint32Array(10)); for (const n of r) s += c[n % c.length]; return s; };
+
+async function load() {
+  data = await api('/api/admin/accounts');
+  if (sdata) loadStore().catch(() => {});
+  $('#appName').textContent = data.app_name; document.title = data.app_name + ' · Admin';
+  $('#who').textContent = 'Signed in as ' + data.email;
+  render();
+}
+function render() {
+  $('#tabs').innerHTML = ORDER.map((k) => `<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${data.screens[k].icon} ${esc(data.screens[k].label)} <span class="n">${data.accounts.filter((a) => a.screen === k).length}</span></button>`).join('');
+  const s = data.screens[tab];
+  $('#tabTitle').textContent = `${s.icon} ${s.label} accounts`;
+  $('#tabNote').innerHTML = '';
+  $('#storePanel').hidden = tab !== 'store';
+  if (tab === 'store') renderStorePanel();
+  const q = $('#search').value.trim().toLowerCase();
+  const list = data.accounts.filter((a) => a.screen === tab && (!q || [a.name, a.email].some((x) => (x || '').toLowerCase().includes(q))));
+  $('#list').innerHTML = list.map((a) => `<div class="acct ${a.active ? '' : 'off'}" data-id="${a.id}">
+      <div class="head"><b title="${esc(a.name)}">${esc(a.name)}</b><span class="badge">${a.active ? 'ON' : 'OFF'}</span>
+        <label class="sw" title="Switch this account on or off"><input type="checkbox" data-sw ${a.active ? 'checked' : ''}><i></i></label></div>
+      <div class="meta">✉ ${esc(a.email || 'no sign-in')}<br>${a.screen === 'store' ? storeMeta(a) : `👥 ${a.people} ${a.people === 1 ? 'person' : 'people'} · ${a.open_items} open · last change ${when(a.last_activity)}`}</div>
+      <div class="btns"><button class="primary" data-open>Open screen ▸</button><button data-edit>Edit</button></div></div>`).join('')
+    || `<div class="empty">No ${esc(s.label)} accounts${q ? ' match' : ' yet'}. ${q ? '' : 'Tap "+ New account" to make one.'}</div>`;
+  history.replaceState(null, '', '#' + tab);
+}
+$('#tabs').onclick = (e) => { const b = e.target.closest('[data-tab]'); if (b) { tab = b.dataset.tab; render(); } };
+$('#search').oninput = render;
+$('#list').addEventListener('change', (e) => {
+  if (!e.target.matches('[data-sw]')) return;
+  const id = Number(e.target.closest('[data-id]').dataset.id), on = e.target.checked;
+  const a = data.accounts.find((x) => x.id === id);
+  run(async () => {
+    await api('/api/admin/accounts/' + id, { active: on }, 'PUT');
+    toast(`${a.name} switched ${on ? 'on' : 'off'}`); await load();
+  }).then((r) => { if (r === null) load(); });
+});
+$('#list').addEventListener('click', (e) => {
+  const card = e.target.closest('[data-id]'); if (!card) return;
+  const a = data.accounts.find((x) => x.id === Number(card.dataset.id));
+  if (e.target.closest('[data-open]')) return run(async () => { await api('/api/admin/open/' + a.id, {}); location.href = '/'; });
+  if (e.target.closest('[data-edit]')) return editDialog(a);
+});
+
+// ---------- Store Orders: store settings, cards, and the control panel (was the master screen) ----------
+let sdata = null, tickets = {}, ofilter = 'all', es = null;
+function storeMeta(a) {
+  const st = a.store;
+  if (!st) return '<span style="color:#fca5a5">⚠ Not set up: tap Edit and enter its SKU prefix</span>';
+  const ov = sdata && sdata.stores.find((x) => x.household_id === a.id);
+  return `<span class="sdot" style="background:${esc(st.color)}"></span>SKU prefix <b class="mono">${esc(st.sku_prefix)}</b> · ${a.open_orders} open order${a.open_orders === 1 ? '' : 's'}<br>
+    <span class="pill ${st.printer ? 'ok' : ''}">printer ${st.printer ? 'on · ' + esc(st.agent_id || '') : 'off'}</span> ${ov ? emailPill(ov) : (st.emails ? '<span class="pill ok">email on</span>' : '<span class="pill">email off</span>')}`;
+}
+function storeFields(st, screen) {
+  st = st || { sku_prefix: '', color: '#f59e0b', printer: false, agent_id: '', emails: '' };
+  return `<div class="storeset" id="storeSet" ${screen === 'store' ? '' : 'hidden'}>
+    <label>SKU prefix</label><input name="sku_prefix" maxlength="20" value="${esc(st.sku_prefix)}" placeholder="e.g. A-" style="max-width:160px">
+    <div class="muted" style="font-size:13px;margin-top:4px">Every product SKU for this store in Wix must start with it (A-1001, A-1002…). The longest matching prefix wins.</div>
+    <div class="two"><div><label>Color</label><input name="color" type="color" value="${esc(st.color || '#f59e0b')}"></div>
+      <div><label>Raspberry Pi name</label><input name="agent_id" maxlength="40" value="${esc(st.agent_id || '')}" placeholder="pi-…"></div></div>
+    <label class="check" style="margin-top:12px"><input type="checkbox" name="printer" ${st.printer ? 'checked' : ''}> Print each order at the store (receipt printer via the Pi)</label>
+    <label>Emails that get every order (optional)</label><input name="emails" value="${esc(st.emails || '')}" placeholder="owner@store.com, manager@store.com">
+  </div>`;
+}
+const readStore = (f) => ({ sku_prefix: f.sku_prefix.value, color: f.color.value, agent_id: f.agent_id.value, printer: f.printer.checked, emails: f.emails.value });
+function emailPill(s) {
+  if (!s.emails || !s.emails.length) return '<span class="pill">email off</span>';
+  if (sdata && !sdata.emailConfigured) return '<span class="pill bad" title="Add SMTP settings in Render">email not set up</span>';
+  const st = s.emailStatus;
+  if (st && !st.ok) return `<span class="pill bad" title="${esc(st.error)}">email failed #${esc(st.orderNumber)}</span>`;
+  return `<span class="pill ok" title="${esc(s.emails.join(', '))}">email on${st ? ' · sent ' + ago(st.at) : ''}</span>`;
+}
+const ago = (iso) => { if (!iso) return 'never'; const m = Math.floor((Date.now() - Date.parse(iso)) / 60000); return m < 1 ? 'just now' : m < 60 ? m + 'm ago' : Math.floor(m / 60) + 'h ' + (m % 60) + 'm ago'; };
+const storeOf = (id) => (sdata ? sdata.stores.find((x) => x.id === id) : null);
+function renderStorePanel() {
+  if (!sdata) return;
+  const all = Object.values(tickets);
+  const un = all.filter((t) => t.storeId === 'unassigned' && !['done', 'cancelled'].includes(t.status));
+  $('#unassigned').hidden = !un.length;
+  $('#unassigned').innerHTML = un.length ? `<b>${un.length} order(s) have items whose SKU doesn't match any store.</b> These items didn't go to any store screen or printer. Fix the product SKU in Wix Stores (it must start with a store's prefix). Orders: ${un.map((t) => '#' + esc(t.orderNumber)).join(', ')} <button class="sm" id="clearUn">Mark handled</button>` : '';
+  const ids = ['all', ...sdata.stores.map((x) => x.id), 'unassigned'];
+  $('#filters').innerHTML = ids.map((id) => `<button data-of="${esc(id)}" class="${ofilter === id ? 'on' : ''}">${esc(id === 'all' ? 'All stores' : id === 'unassigned' ? 'Unassigned' : (storeOf(id) || {}).name || id)}</button>`).join('');
+  const list = all.filter((t) => ofilter === 'all' || t.storeId === ofilter).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  $('#ocount').textContent = list.length;
+  $('#orders').innerHTML = list.map((t) => { const st = storeOf(t.storeId); return `<div class="order"><div class="top"><div><span class="sdot" style="background:${esc(st ? st.color : '#ef4444')}"></span><b>#${esc(t.orderNumber)}</b> <span class="muted">${esc(st ? st.name : t.storeId === 'unassigned' ? 'UNASSIGNED' : t.storeId)}</span></div>
+      <div><span class="muted" style="font-size:13px">${ago(t.createdAt)}</span> <span class="pill ${esc(t.status)}">${esc(t.status)}</span></div></div>
+      <div class="muted" style="font-size:14px">${esc(t.customer.name)}${t.customer.phone ? ' · ' + esc(t.customer.phone) : ''}</div>
+      <ul>${t.items.map((i) => `<li>${esc(i.qty)}× ${esc(i.name)} <span class="mono">#${esc(i.sku || '—')}</span></li>`).join('')}</ul></div>`; }).join('') || '<div class="muted">No orders in the last 12 hours.</div>';
+  $('#agents').innerHTML = sdata.agents.map((a) => `<div class="row"><div class="grow"><b>${esc(a.agentId)}</b> <span class="pill ${a.online ? 'ok' : 'bad'}">${a.online ? 'online' : 'offline'}</span>
+      <div class="muted" style="font-size:13px">last seen ${ago(a.lastSeen)} · stores: ${a.stores.map((id) => `${esc((storeOf(id) || {}).name || id)} <span class="mono">(storeId ${esc(id)})</span>`).join(', ') || '—'}</div>
+      <div style="margin-top:4px">${(a.printers || []).map((p) => `<span class="pill ${p.ok ? 'ok' : 'bad'}" title="${esc(p.error || '')}">${esc((storeOf(p.storeId) || {}).name || p.storeId)}: ${p.ok ? 'ready' : esc(p.error || 'offline')}</span>`).join(' ')}</div></div>
+      <button class="sm" data-copy="${esc(a.agentKey)}">Copy agent key</button></div>`).join('') || '<div class="muted">No stores have printing turned on.</div>';
+  $('#jobs').innerHTML = sdata.jobs.slice(0, 25).map((j) => { const st = storeOf(j.storeId), t = tickets[j.ticketId];
+    return `<div class="row"><div class="grow">${esc(st ? st.name : j.storeId)} · #${esc(t ? t.orderNumber : j.ticketId.split(':')[0].slice(0, 8))}
+      <div class="muted" style="font-size:13px">${ago(j.createdAt)}${j.attempts > 1 ? ' · try ' + j.attempts : ''}${j.error ? ' · ' + esc(j.error) : ''}</div></div>
+      <span class="pill ${j.status === 'done' ? 'ok' : j.status === 'failed' ? 'bad' : ''}">${esc(j.status)}</span>
+      ${j.status === 'failed' ? `<button class="sm" data-retry="${esc(j.ticketId)}">Retry</button>` : ''}</div>`; }).join('') || '<div class="muted">No print jobs yet.</div>';
+}
+async function loadStore() {
+  const [o, t] = await Promise.all([api('/api/admin/store/overview'), api('/api/admin/store/tickets')]);
+  sdata = o; tickets = {}; t.forEach((x) => { tickets[x.id] = x; });
+  if (tab === 'store') render();
+}
+function listenStore() {
+  es = new EventSource('/api/admin/store/stream');
+  es.onopen = () => { $('#live').className = 'live ok'; $('#live').textContent = '● live'; loadStore().catch(() => {}); };
+  es.onerror = () => { $('#live').className = 'live'; $('#live').textContent = '● reconnecting'; };
+  es.addEventListener('ticket', (e) => { const t = JSON.parse(e.data); tickets[t.id] = t; if (tab === 'store') renderStorePanel(); });
+  es.addEventListener('job', (e) => { const j = JSON.parse(e.data); if (!sdata) return; const i = sdata.jobs.findIndex((x) => x.id === j.id); if (i >= 0) sdata.jobs[i] = j; else sdata.jobs.unshift(j); if (tab === 'store') renderStorePanel(); });
+  es.addEventListener('agents', () => loadStore().catch(() => {}));
+  es.addEventListener('email', (e) => { const d = JSON.parse(e.data); const st = storeOf(d.storeId); if (st) st.emailStatus = d; if (!d.ok) toast(`Email to ${st ? st.name : d.storeId} failed: ${d.error}`, 'bad'); if (tab === 'store') render(); });
+  setInterval(() => { if (tab === 'store') loadStore().catch(() => {}); }, 15000);
+}
+function copy(t) { if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => toast('Copied'), () => prompt('Copy this:', t)); else prompt('Copy this:', t); }
+$('#storePanel').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.id === 'testOrder') return run(async () => { const r = await api('/api/admin/store/test-order', {}); toast(`Test order sent to ${r.created} store(s)`); });
+  if (b.id === 'copyHook') return copy(sdata.webhookUrl);
+  if (b.dataset.copy) return copy(b.dataset.copy);
+  if (b.dataset.of) { ofilter = b.dataset.of; return renderStorePanel(); }
+  if (b.dataset.retry) return run(async () => { await api(`/api/admin/store/tickets/${encodeURIComponent(b.dataset.retry)}/reprint`, {}); toast('Sent to the printer again'); });
+  if (b.id === 'clearUn') return run(async () => {
+    for (const t of Object.values(tickets)) if (t.storeId === 'unassigned' && !['done', 'cancelled'].includes(t.status)) await api(`/api/admin/store/tickets/${encodeURIComponent(t.id)}/status`, { status: 'done' });
+  });
+});
+
+function screenSelect(cur) {
+  return `<select name="screen">${ORDER.map((k) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${data.screens[k].icon} ${esc(data.screens[k].label)}</option>`).join('')}</select>`;
+}
+function newDialog() {
+  const people = tab === 'shop' ? 'Crew' : tab === 'store' ? 'Staff' : 'Family members';
+  const f = openModal(`<h2>New account</h2>
+    <label>Account name</label><input name="name" maxlength="80" placeholder="${tab === 'shop' ? "e.g. Papa's Shop" : tab === 'store' ? 'e.g. Main Street Hardware' : 'e.g. The Toon House'}" required>
+    <label>Screen</label>${screenSelect(tab)}
+    <label>Sign-in email</label><input name="email" type="email" autocomplete="off" required>
+    <label>Password (8 or more characters)</label><div class="pwrow"><input name="password" type="text" autocomplete="off" minlength="8" required><button type="button" id="gen">Make one</button></div>
+    <div class="muted" style="font-size:13px;margin-top:4px">Write it down or send it to them; it can't be shown again (you can set a new one in Edit).</div>
+    ${storeFields(null, tab)}
+    <label id="pLabel">${people}</label><div class="names" id="names"></div>
+    <button type="button" class="ghost" id="addName" style="margin-top:8px">+ Add another person</button>
+    <div class="actions"><button type="button" onclick="closeModal()">Cancel</button><button class="primary" id="create">Create account</button></div>`);
+  const addName = (v = '') => { const d = document.createElement('div'); d.innerHTML = `<input maxlength="40" placeholder="Name" value="${esc(v)}"><button type="button" class="ghost" title="Remove">×</button>`; d.querySelector('button').onclick = () => d.remove(); $('#names').appendChild(d); };
+  addName(); addName();
+  $('#addName').onclick = () => { addName(); $$('#names input').pop().focus(); };
+  $('#gen').onclick = () => { f.password.value = makePassword(); };
+  f.screen.onchange = () => { $('#pLabel').textContent = f.screen.value === 'shop' ? 'Crew' : f.screen.value === 'store' ? 'Staff (optional)' : 'Family members'; $('#storeSet').hidden = f.screen.value !== 'store'; };
+  f.screen.onchange();
+  setTimeout(() => f.name.focus(), 30);
+  $('#create').onclick = () => run(async () => {
+    if (!f.reportValidity()) return;
+    await api('/api/admin/accounts', { name: f.name.value, screen: f.screen.value, email: f.email.value, password: f.password.value,
+      members: $$('#names input').map((i) => i.value.trim()).filter(Boolean), ...(f.screen.value === 'store' ? { store: readStore(f) } : {}) });
+    tab = f.screen.value; closeModal(); toast('Account created'); await load();
+  });
+}
+$('#newBtn').onclick = newDialog;
+function editDialog(a) {
+  const f = openModal(`<h2>Edit ${esc(a.name)}</h2>
+    <label>Account name</label><input name="name" maxlength="80" value="${esc(a.name)}" required>
+    <label>Screen</label>${screenSelect(a.screen)}
+    <div class="muted" style="font-size:13px;margin-top:4px">Changing the screen moves the account to that tab. Its board and items stay.</div>
+    ${storeFields(a.store, a.screen)}
+    <label>Sign-in email</label><input name="email" type="email" value="${esc(a.email || '')}" autocomplete="off">
+    <label>New password (leave empty to keep it)</label><div class="pwrow"><input name="password" type="text" autocomplete="off" placeholder="unchanged"><button type="button" id="gen">Make one</button></div>
+    <div class="muted" style="font-size:13px;margin-top:4px">A new password signs out every screen on this account.</div>
+    <label class="check" style="margin-top:14px"><input type="checkbox" name="active" ${a.active ? 'checked' : ''}> Switched on</label>
+    <div class="actions"><button type="button" class="danger" id="del" style="margin-right:auto">Delete account</button><button type="button" onclick="closeModal()">Cancel</button><button class="primary" id="save">Save</button></div>`);
+  $('#gen').onclick = () => { f.password.value = makePassword(); };
+  f.screen.onchange = () => { $('#storeSet').hidden = f.screen.value !== 'store'; };
+  $('#save').onclick = () => run(async () => {
+    if (!f.reportValidity()) return;
+    const body = { name: f.name.value, screen: f.screen.value, active: f.active.checked };
+    if (f.screen.value === 'store') body.store = readStore(f);
+    if (f.email.value.trim() && f.email.value.trim().toLowerCase() !== (a.email || '')) body.email = f.email.value;
+    if (f.password.value) body.password = f.password.value;
+    await api('/api/admin/accounts/' + a.id, body, 'PUT');
+    closeModal(); toast('Saved'); await load();
+  });
+  $('#del').onclick = async () => {
+    if (!(await ask(`Delete "${a.name}" and everything on its board? This can't be undone. (To pause it, switch it off instead.)`, 'Delete forever', true))) return editDialog(a);
+    run(async () => { await api('/api/admin/accounts/' + a.id, undefined, 'DELETE'); toast('Account deleted'); await load(); });
+  };
+}
+$('#pwBtn').onclick = () => {
+  const f = openModal(`<h2>Change your admin password</h2>
+    <label>Current password</label><input name="cur" type="password" autocomplete="current-password" required>
+    <label>New password (8 or more characters)</label><input name="pw" type="password" autocomplete="new-password" minlength="8" required>
+    <div class="actions"><button type="button" onclick="closeModal()">Cancel</button><button class="primary" id="savePw">Change</button></div>`);
+  $('#savePw').onclick = () => run(async () => {
+    if (!f.reportValidity()) return;
+    await api('/api/password', { current: f.cur.value, password: f.pw.value }); closeModal(); toast('Password changed');
+  });
+};
+
+(async () => {
+  const h = location.hash.slice(1); if (ORDER.includes(h)) tab = h;
+  // Coming back from an account's screen: stop viewing it.
+  await api('/api/admin/leave', {}).catch(() => {});
+  await load();
+  listenStore();
+})().catch((e) => toast(e.message, 'bad'));
+</script>
+</body>
+</html>

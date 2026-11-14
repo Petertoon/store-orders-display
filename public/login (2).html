@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%8F%A0%3C/text%3E%3C/svg%3E">
+<meta name="theme-color" content="#0f172a"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
+</head>
+<body>
+<form class="auth" id="f">
+  <h1 id="app">Sign in</h1>
+  <div class="muted">Sign in to your board</div>
+  <label for="email">Email</label>
+  <input id="email" type="email" autocomplete="username" required>
+  <label for="pw">Password</label>
+  <input id="pw" type="password" autocomplete="current-password" required>
+  <button class="primary" type="submit">Sign in</button>
+  <div class="err" id="err"></div>
+</form>
+<script src="/app.js"></script>
+<script>
+api('/api/setup-status').then((s) => { if (s.needs_setup) location.href = '/setup'; $('#app').textContent = s.app_name; document.title = s.app_name + ' · Sign in'; }).catch(() => {});
+$('#f').addEventListener('submit', async (e) => {
+  e.preventDefault(); $('#err').textContent = '';
+  try {
+    const r = await api('/api/login', { email: $('#email').value, password: $('#pw').value });
+    location.href = r.admin ? '/admin' : '/';
+  } catch (err) { $('#err').textContent = err.message; }
+});
+</script>
+</body>
+</html>

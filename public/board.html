@@ -1,0 +1,861 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+<title>HomeBoard</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%8F%A0%3C/text%3E%3C/svg%3E">
+<meta name="theme-color" content="#0f172a"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+  .top { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #0f172a; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .top .brand { font-weight: 800; font-size: 20px; white-space: nowrap; }
+  .top .spacer { flex: 1; }
+  .top input, .top select { width: auto; padding: 8px 10px; background: var(--card); }
+  .top #search { width: 200px; }
+  .top label.check { margin: 0; color: var(--muted); font-size: 13px; }
+  button.dk { background: #1e2a44; border: 1px solid var(--line); }
+  button.dk.on, button[data-keys].on { background: #2c4a86; border-color: #5b8cff; }
+  .mebtn { display: flex; align-items: center; gap: 8px; background: #1e2a44; border: 1px solid var(--line); }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--mc, #64748b); display: inline-block; flex: none; }
+  #clock { color: var(--muted); font-size: 14px; white-space: nowrap; }
+  .counts { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 14px 0; }
+  .counts span { border: 1px solid var(--c, var(--line)); border-radius: 7px; padding: 3px 9px; font-size: 13px; font-weight: 700; background: #111a2c; }
+
+  /* board */
+  #board { display: flex; gap: 10px; padding: 10px 14px 18px; overflow-x: auto; align-items: flex-start; min-height: calc(100vh - 110px); padding-bottom: calc(18px + var(--oskh, 0px)); }
+  .col { flex: 1 1 0; min-width: 250px; background: var(--colbg, var(--panel)); color: var(--cardtx, var(--ink)); border-radius: 10px; display: flex; flex-direction: column; max-height: calc(100vh - 125px); }
+  .col.drop { outline: 2px dashed #8cb4ff; }
+  .colhead { background: var(--c); color: var(--ht, #fff); border-radius: 10px 10px 0 0; padding: 10px 12px; display: flex; align-items: center; gap: 6px; }
+  .colhead div { flex: 1; min-width: 0; }
+  .colhead b { display: block; font-size: 16px; letter-spacing: .02em; }
+  .colhead small { opacity: .9; font-size: 12.5px; }
+  .colhead button { background: rgba(0,0,0,.18); color: inherit; padding: 4px 10px; font-size: 18px; line-height: 1.2; }
+  .cards { padding: 8px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+  .empty { opacity: .6; text-align: center; padding: 16px 0; font-size: 14px; }
+  .tc { background: var(--cardbg, var(--card)); color: var(--cardtx, var(--ink)); border-radius: 9px; border-left: 4px solid var(--c); padding: 9px 10px 10px; cursor: pointer; position: relative; user-select: none; }
+  .tc:hover { filter: brightness(1.1); }
+  .tc.dragging { opacity: .4; }
+  .tc .t { font-weight: 800; font-size: 16px; padding-right: 30px; line-height: 1.3; word-break: break-word; }
+  .tc .d { opacity: .8; font-size: 13.5px; line-height: 1.35; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tc .m { font-size: 13.5px; line-height: 1.5; margin-top: 3px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .tc .who { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; }
+  .tc .late { color: #ff6b6b; font-weight: 800; } .tc .soon { color: #fbbf24; font-weight: 800; } .tc .ok { color: #34d399; font-weight: 800; }
+  .flag { background: #7f1d1d; color: #fecaca; font-size: 11.5px; font-weight: 800; border-radius: 5px; padding: 2px 6px; }
+  .bar { height: 6px; background: rgba(127,127,127,.3); border-radius: 9px; overflow: hidden; margin-top: 5px; }
+  .bar i { display: block; height: 100%; background: #4ade80; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .chip { border: 1.5px solid var(--b); color: var(--b); background: transparent; padding: 5px 11px; font-size: 13px; border-radius: 7px; font-weight: 800; }
+  .chip.on { background: var(--b); color: #0b1220; }
+  .nx { position: absolute; right: 6px; top: 6px; background: rgba(127,127,127,.25); color: inherit; padding: 2px 10px; font-size: 18px; border-radius: 6px; }
+
+  /* to-do ticket (opens over the board) */
+  .ticket { position: fixed; top: 0; left: 0; right: 0; bottom: var(--oskh, 0px); z-index: 40; display: flex; flex-direction: column; background: var(--colbg, var(--bg)); }
+  .thead { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--c, #0f172a); color: var(--ht, #fff); flex-wrap: wrap; }
+  .thead > button, .thead select { background: rgba(0,0,0,.25); color: inherit; border: 1px solid rgba(255,255,255,.3); width: auto; }
+  .thead select option { color: #000; }
+  .thead .chip:not(.on) { background: rgba(11,18,32,.85); }
+  .thead .spacer { flex: 1; }
+  #saveState { font-size: 13.5px; font-weight: 700; opacity: .9; min-width: 70px; text-align: right; }
+  .tgrid { flex: 1; display: grid; grid-template-columns: 1fr 360px; gap: 10px; padding: 10px 14px; min-height: 0; }
+  .pane { background: var(--panel); border-radius: 10px; padding: 14px; overflow-y: auto; min-height: 0; min-width: 0; border-top: 4px solid var(--c, transparent); }
+  /* The main ticket panel takes the column's card colors. */
+  #tMain { background: var(--cardbg, var(--panel)); color: var(--cardtx, var(--ink)); }
+  #tMain label, #tMain h3 small { color: inherit; opacity: .75; }
+  .pane h3 { margin: 18px 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: .05em; opacity: .85; }
+  .pane h3:first-child { margin-top: 0; }
+  .fld { position: relative; display: flex; gap: 6px; align-items: flex-start; }
+  .fld textarea, .fld input { flex: 1; min-width: 0; resize: vertical; background: rgba(127,127,127,.14); color: inherit; border-color: rgba(127,127,127,.4); }
+  #tTitle { font-size: 24px; font-weight: 800; resize: none; overflow: hidden; line-height: 1.3; padding: 10px 12px; }
+  #tNotes { min-height: 130px; line-height: 1.45; }
+  .mic { flex: none; width: 48px; height: 46px; padding: 0; font-size: 20px; background: rgba(127,127,127,.25); color: inherit; }
+  .mic.listening { background: #dc2626; color: #fff; animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 6px rgba(220,38,38,.35); } }
+  .nomic .mic, .nomic .key.off { display: none; }
+  .steps { display: flex; flex-direction: column; gap: 6px; }
+  .step { display: flex; align-items: center; gap: 8px; background: rgba(127,127,127,.13); border-radius: 8px; padding: 4px 6px 4px 10px; }
+  .step input[type=checkbox] { width: 26px; height: 26px; flex: none; accent-color: #22c55e; cursor: pointer; }
+  .step input[type=text] { flex: 1; min-width: 0; background: transparent; border-color: transparent; color: inherit; padding: 8px 6px; }
+  .step input[type=text]:focus { background: rgba(127,127,127,.18); border-color: rgba(127,127,127,.4); }
+  .step.done input[type=text] { text-decoration: line-through; opacity: .6; }
+  .step .x { background: transparent; color: #ff8a8a; font-size: 22px; padding: 2px 10px; }
+  .addstep { margin-top: 8px; }
+  .addstep button.primary { height: 46px; }
+  .side label { margin-top: 16px; }
+  .side label:first-child { margin-top: 0; }
+  .pick { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pick button { padding: 9px 13px; display: inline-flex; align-items: center; gap: 7px; background: #1e2a44; border: 2px solid transparent; }
+  .pick button.on { border-color: var(--mc, #5b8cff); background: #24345a; }
+  .side input[type=date] { margin-top: 6px; color-scheme: dark; }
+  .hist div { padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; color: #c3cee6; }
+  .hist small { color: var(--muted); display: block; }
+
+  /* admin viewing an account */
+  .adminbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 14px; background: #3b2a05; color: #fde68a; font-size: 14.5px; }
+  .adminbar button { padding: 6px 12px; background: #fde68a; color: #3b2a05; }
+  .adminbar .off { background: #7f1d1d; color: #fecaca; border-radius: 6px; padding: 2px 8px; font-weight: 800; }
+  /* shop jobs: job number and customer */
+  .jn { opacity: .65; font-weight: 700; margin-right: 6px; }
+  .cgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+  #custBox label { margin-top: 10px; }
+  a.linkbtn { display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; text-decoration: none; }
+  a.linkbtn.off { opacity: .35; pointer-events: none; }
+  .fullmsg { max-width: 560px; margin: 12vh auto; background: var(--panel); border-radius: 14px; padding: 28px; text-align: center; }
+  .fullmsg h2 { margin: 0 0 10px; }
+
+  /* "who are you?" */
+  .whobox { position: fixed; inset: 0; z-index: 80; background: rgba(5,9,18,.94); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 20px; }
+  .whobox h2 { margin: 0; font-size: 28px; }
+  .whobox .people { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; max-width: 900px; }
+  .whobox .people button { min-width: 150px; padding: 22px 20px; font-size: 22px; border-radius: 14px; background: #18233a; border: 3px solid var(--mc); display: flex; align-items: center; gap: 12px; justify-content: center; }
+  .whobox .people .dot { width: 20px; height: 20px; }
+
+  /* dialogs */
+  .modal-back { bottom: var(--oskh, 0px); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .presets { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .presets button { padding: 5px 10px; font-size: 13px; }
+  .btnset { border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; margin-top: 8px; }
+  .btnset .row { display: grid; grid-template-columns: auto 1fr 52px; gap: 8px; align-items: center; }
+  .btnset .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+  .btnset .row2 label { margin: 0; font-size: 12.5px; color: var(--muted); } .btnset .row2 select { margin-top: 2px; }
+  .colors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .colors div { background: #0f1729; border: 1px solid var(--line); border-radius: 8px; padding: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .colors span { width: 100%; font-weight: 700; font-size: 13px; }
+  .colors small { width: 100%; color: var(--muted); font-size: 11.5px; }
+  .colors input[type=color] { width: 46px; height: 34px; }
+  .collist div { display: flex; align-items: center; gap: 6px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+  .collist div b { flex: 1; }
+  .collist i { width: 14px; height: 14px; border-radius: 4px; background: var(--c); display: inline-block; flex: none; }
+  .collist button { padding: 6px 10px; }
+  .addrow { display: flex; gap: 6px; }
+  .mrow { display: grid; grid-template-columns: 52px 1fr auto auto; gap: 6px; align-items: center; margin-top: 6px; }
+  .mrow button { padding: 8px 10px; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 18px 0 6px; }
+
+  /* on-screen keyboard */
+  #osk { position: fixed; left: 0; right: 0; bottom: 0; z-index: 250; background: #0a1020; border-top: 1px solid var(--line); padding: 8px 6px 10px; user-select: none; touch-action: manipulation; }
+  #osk .krow { display: flex; gap: 6px; justify-content: center; margin-top: 6px; max-width: 1100px; margin-left: auto; margin-right: auto; }
+  #osk .key { flex: 1 1 0; min-width: 0; height: 58px; padding: 0; font-size: 22px; font-weight: 600; background: #24314f; border-radius: 8px; color: #fff; }
+  #osk .key.mod { flex: 1.4 1 0; font-size: 17px; background: #182238; }
+  #osk .key.space { flex: 5 1 0; font-size: 15px; color: var(--muted); }
+  #osk .key.enter { flex: 1.6 1 0; background: #2563eb; }
+  #osk .key.on, #osk .key.caps { background: #5b8cff; }
+  #osk .key.down { filter: brightness(1.6); }
+
+  @media (max-width: 1000px) { .tgrid { grid-template-columns: 1fr 300px; } }
+  @media (max-width: 760px) {
+    .cgrid { grid-template-columns: 1fr; }
+    .top { gap: 6px; padding: 8px; } .top .brand { font-size: 18px; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .top #search { order: 10; width: 100%; } .top #whoSel { flex: 1; } .top .spacer { display: none; } #clock { display: none; } .top label.check { display: none; } .hide-sm { display: none; }
+    #board { min-height: auto; scroll-snap-type: x mandatory; padding: 8px; } .col { min-width: 86vw; scroll-snap-align: center; max-height: none; }
+    .ticket { overflow-y: auto; } .tgrid { grid-template-columns: 1fr; flex: none; padding: 8px; } .pane { overflow: visible; }
+    .thead { padding: 8px; } .thead .chips { order: 5; width: 100%; } #tTitle { font-size: 20px; }
+    #osk .key { height: 46px; font-size: 18px; } #osk .krow { gap: 4px; margin-top: 5px; }
+    .btnset .row2 { grid-template-columns: 1fr; } .whobox .people button { min-width: 42vw; padding: 18px 12px; font-size: 19px; }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span id="bIcon">🏠</span> <span id="house"></span></div>
+  <button class="primary" id="newTodo">+ New to-do</button>
+  <input id="search" type="search" placeholder="Search to-dos…" autocomplete="off">
+  <select id="whoSel" aria-label="Whose to-dos"></select>
+  <label class="check"><input type="checkbox" id="allDone"> Older done</label>
+  <div class="spacer"></div>
+  <button class="dk" data-keys title="On-screen keyboard (for touchscreens)">⌨<span class="hide-sm"> Keyboard</span></button>
+  <button class="dk" id="setupBtn">⚙<span class="hide-sm"> Board setup</span></button>
+  <button class="dk" id="familyBtn"><span id="pIcon">👪</span><span class="hide-sm" id="pLabel"> Family</span></button>
+  <button class="mebtn" id="meBtn" title="Switch person"><i class="dot"></i><span>Who?</span></button>
+  <span id="clock"></span>
+</header>
+<div class="adminbar" id="adminBar" hidden>👁 Admin view of <b id="abName"></b> <span id="abOff"></span><span style="flex:1"></span><button type="button" id="abBack">← Back to admin</button></div>
+<div class="counts" id="counts"></div>
+<main id="board"></main>
+
+<div class="ticket" id="ticket" hidden>
+  <div class="thead" id="tHead"></div>
+  <div class="tgrid">
+    <div class="pane" id="tMain">
+      <div class="fld"><textarea id="tTitle" rows="1" maxlength="200" placeholder="What needs doing?"></textarea><button type="button" class="mic" data-mic="tTitle" title="Talk to type">🎤</button></div>
+      <div id="custBox" hidden>
+        <div class="cgrid">
+          <div><label for="tCust">Customer</label><div class="fld"><input id="tCust" type="text" maxlength="120" placeholder="Name" autocomplete="off"><button type="button" class="mic" data-mic="tCust" title="Talk to type">🎤</button></div></div>
+          <div><label for="tPhone">Phone</label><div class="fld"><input id="tPhone" type="tel" maxlength="40" placeholder="Phone" autocomplete="off"><a class="mic linkbtn" id="tCall" title="Call">📞</a></div></div>
+        </div>
+        <label for="tAddr">Address</label><div class="fld"><input id="tAddr" type="text" maxlength="300" placeholder="Where" autocomplete="off"><a class="mic linkbtn" id="tMap" target="_blank" rel="noopener" title="Open in maps">🗺</a></div>
+      </div>
+      <label for="tNotes">Notes</label>
+      <div class="fld"><textarea id="tNotes" rows="5" maxlength="10000" placeholder="Details: where, what to get, who to call…"></textarea><button type="button" class="mic" data-mic="tNotes" title="Talk to type">🎤</button></div>
+      <h3>Checklist <small id="stepCount"></small></h3>
+      <div class="steps" id="steps"></div>
+      <div class="fld addstep"><input id="newStep" type="text" maxlength="300" placeholder="Add a step…" autocomplete="off"><button type="button" class="mic" data-mic="newStep" title="Talk to type">🎤</button><button type="button" class="primary" id="addStep">Add</button></div>
+    </div>
+    <div class="pane side" id="tSide"></div>
+  </div>
+</div>
+
+<div class="whobox" id="who" hidden></div>
+<div class="modal-back" id="m"><form class="modal" id="mBody" onsubmit="return false"></form></div>
+
+<script src="/app.js"></script>
+<script src="/keys.js"></script>
+<script>
+const SCREEN = Math.random().toString(36).slice(2, 10); // tells this screen's own saves apart from other screens'
+let me = null, cols = [], todos = [], members = [], openId = null, cur = null;
+// Words for each kind of screen.
+const WORDS = {
+  todo: { one: 'to-do', many: 'to-dos', One: 'To-do', icon: '🏠', people: 'Family', pIcon: '👪', title: 'What needs doing?', place: 'house' },
+  shop: { one: 'job', many: 'jobs', One: 'Job', icon: '🔧', people: 'Crew', pIcon: '👷', title: 'Job: what needs doing?', place: 'shop' },
+};
+let W = WORDS.todo, isShop = false;
+const plural = (n) => `${n} ${n === 1 ? W.one : W.many}`;
+const memberById = (id) => members.find((m) => m.id === id) || null;
+const firstLine = (s) => String(s || '').split('\n').map((x) => x.trim()).find(Boolean) || '';
+const shortDate = (d) => (d ? new Date(d.length === 10 ? d + 'T12:00:00' : d).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '');
+const when = (d) => new Date(d).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const addDays = (n, from = new Date()) => { const d = new Date(from); d.setDate(d.getDate() + n); return isoDay(d); };
+async function run(fn) { try { return await fn(); } catch (e) { toast(e.message, 'bad'); return null; } }
+
+// ---------- dialogs ----------
+function openModal(html) {
+  const mb = $('#mBody'); mb.onclick = mb.oninput = mb.onchange = null;
+  mb.innerHTML = html;
+  $('#m').classList.add('open');
+  return mb;
+}
+function closeModal() { $('#m').classList.remove('open'); $('#mBody').innerHTML = ''; }
+$('#m').addEventListener('mousedown', (e) => { if (e.target.id === 'm') closeModal(); });
+// A yes/no question in our own dialog (bigger than the browser's, and works with the on-screen keyboard).
+function ask(question, yes = 'Yes', danger = false) {
+  return new Promise((resolve) => {
+    const f = openModal(`<h2 style="font-size:20px">${esc(question)}</h2><div class="actions">
+      <button type="button" data-a="0">Cancel</button><button type="button" class="${danger ? 'danger' : 'primary'}" data-a="1">${esc(yes)}</button></div>`);
+    f.onclick = (e) => { const b = e.target.closest('[data-a]'); if (!b) return; closeModal(); resolve(b.dataset.a === '1'); };
+  });
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if ($('#m').classList.contains('open')) closeModal(); else if (!$('#ticket').hidden) closeTicket();
+});
+
+// ---------- who are you? ----------
+function whoPicker() {
+  const box = $('#who');
+  box.innerHTML = `<h2>Who's using this screen?</h2><div class="people">${members.map((m) =>
+    `<button data-m="${m.id}" style="--mc:${m.color}"><i class="dot"></i>${esc(m.name)}</button>`).join('')}</div>
+    <div class="muted">Your name goes on what you add and change. Tap your name at the top to switch.</div>
+    ${me.member ? '<button class="dk" data-m="0">Cancel</button>' : ''}`;
+  box.hidden = false;
+  box.onclick = (e) => {
+    const b = e.target.closest('[data-m]'); if (!b) return;
+    if (b.dataset.m === '0') { box.hidden = true; return; }
+    run(async () => {
+      me.member = await api('/api/me/member', { member_id: Number(b.dataset.m) });
+      box.hidden = true; showMe(); toast(`Hi ${me.member.name}!`);
+      if (cur) renderSide();
+    });
+  };
+}
+function showMe() {
+  if (me.admin) { $('#meBtn').hidden = true; return; }
+  $('#meBtn').style.setProperty('--mc', me.member ? me.member.color : '#64748b');
+  $('#meBtn span').textContent = me.member ? me.member.name : 'Who?';
+}
+$('#meBtn').onclick = whoPicker;
+
+// ---------- board ----------
+async function loadBoard() {
+  const d = await api('/api/board' + ($('#allDone').checked ? '?done=all' : ''));
+  cols = d.columns; todos = d.todos; members = d.members;
+  fillWhoSel();
+  renderBoard();
+}
+function fillWhoSel() {
+  const v = $('#whoSel').value;
+  $('#whoSel').innerHTML = `<option value="">Everyone</option>${me.member ? '<option value="mine">Mine</option>' : ''}` +
+    members.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('') + '<option value="none">For anyone</option>';
+  if ([...$('#whoSel').options].some((o) => o.value === v)) $('#whoSel').value = v;
+}
+function matches(t) {
+  const v = $('#whoSel').value;
+  if (v === 'mine' && !(me.member && t.member_id === me.member.id)) return false;
+  if (v === 'none' && t.member_id) return false;
+  if (/^\d+$/.test(v) && t.member_id !== Number(v)) return false;
+  const q = $('#search').value.trim().toLowerCase();
+  return !q || [t.title, t.notes, t.customer_name, t.customer_phone, t.job_address, t.job_number && String(t.job_number)]
+    .some((s) => (s || '').toLowerCase().includes(q.replace(/^#/, '')));
+}
+// Due date words for a card or ticket.
+function dueHtml(d, done) {
+  if (!d || done) return '';
+  const today = isoDay();
+  if (d < today) return `<span class="late">⚠ Overdue · ${shortDate(d)}</span>`;
+  if (d === today) return '<span class="soon">📅 Due today</span>';
+  if (d === addDays(1)) return '<span class="soon">📅 Due tomorrow</span>';
+  return `<span>📅 Due ${shortDate(d)}</span>`;
+}
+function card(t, c, i) {
+  const btns = (c.buttons || []).map((b, k) => ({ ...b, k })).filter((b) => b.enabled);
+  const last = i === cols.length - 1, next = cols[i + 1];
+  const m = memberById(t.member_id);
+  const title = t.title || firstLine(t.notes) || t.customer_name || '(no title)';
+  const sub = t.title ? firstLine(t.notes) : '';
+  const meta = [];
+  if (isShop && t.customer_name && t.customer_name !== title) meta.push(`<span>👤 ${esc(t.customer_name)}</span>`);
+  if (m) meta.push(`<span class="who"><i class="dot" style="--mc:${m.color}"></i>${esc(m.name)}</span>`);
+  if (t.priority === 'high') meta.push('<span class="flag">⚑ High</span>');
+  const due = dueHtml(t.due_date, last); if (due) meta.push(due);
+  if (t.steps) meta.push(`<span>☑ ${t.steps_done}/${t.steps}</span>`);
+  if (last && t.done_at) meta.push(`<span class="ok">✓ Done ${shortDate(t.done_at)}</span>`);
+  return `<div class="tc" draggable="true" data-todo="${t.id}">
+    <div class="t">${t.job_number ? `<span class="jn">#${t.job_number}</span>` : ''}${esc(title)}</div>
+    ${!last && next ? `<button class="nx" data-next="${t.id}" title="Move to ${esc(next.name)}">›</button>` : ''}
+    ${sub ? `<div class="d">${esc(sub)}</div>` : ''}
+    ${meta.length ? `<div class="m">${meta.join('')}</div>` : ''}
+    ${t.steps && !last ? `<div class="bar"><i style="width:${Math.round((100 * t.steps_done) / t.steps)}%"></i></div>` : ''}
+    ${btns.length ? `<div class="chips">${btns.map((b) => `<button class="chip ${t.status_label === b.label ? 'on' : ''}" style="--b:${b.color || '#3b82f6'}" data-btn="${b.k}" data-tid="${t.id}">${esc(b.label)}</button>`).join('')}</div>` : ''}
+  </div>`;
+}
+// Cards sort themselves: by the place of the button they're marked with (top, middle, bottom), then high priority,
+// then the soonest due date, then the longest in the column. Done: newest first.
+const PLACE_RANK = { top: 0, middle: 1, bottom: 2 };
+const colVars = (c) => `--c:${c.color};` + [['--ht', c.text_color], ['--colbg', c.bg_color], ['--cardbg', c.card_color], ['--cardtx', c.card_text_color]]
+  .filter(([, v]) => v).map(([k, v]) => `${k}:${v};`).join('');
+function sortCards(list, c, last) {
+  if (last) return list.slice().sort((a, b) => String(b.done_at || '').localeCompare(String(a.done_at || '')));
+  const rank = (t) => { const b = (c.buttons || []).find((x) => x.enabled && x.label === t.status_label); return PLACE_RANK[(b && b.place) || 'middle']; };
+  return list.map((t, i) => ({ t, i })).sort((a, b) => rank(a.t) - rank(b.t)
+    || (b.t.priority === 'high') - (a.t.priority === 'high')
+    || (a.t.due_date || '9999').localeCompare(b.t.due_date || '9999') || a.i - b.i).map((x) => x.t);
+}
+function renderBoard() {
+  const shown = todos.filter(matches);
+  $('#counts').innerHTML = `<span>${shown.length} Total</span>` +
+    cols.map((c) => `<span style="--c:${c.color}">${shown.filter((t) => t.column_id === c.id).length} ${esc(c.name)}</span>`).join('');
+  $('#board').innerHTML = cols.map((c, i) => {
+    const last = i === cols.length - 1;
+    const list = sortCards(shown.filter((t) => t.column_id === c.id), c, last);
+    return `<section class="col" data-col="${c.id}" style="${colVars(c)}">
+      <div class="colhead"><div><b>${esc(c.name.toUpperCase())}</b><small>${plural(list.length)}</small></div>
+        <button data-add="${c.id}" title="New ${W.one} in ${esc(c.name)}">+</button><button data-gear="${c.id}" title="Column settings">⚙</button></div>
+      <div class="cards">${list.map((t) => card(t, c, i)).join('') || `<div class="empty">${last ? 'Nothing done yet' : 'Nothing here'}</div>`}</div></section>`;
+  }).join('');
+}
+$('#board').addEventListener('click', (e) => {
+  const g = e.target.closest('[data-gear]'); if (g) return columnSettings(Number(g.dataset.gear));
+  const a = e.target.closest('[data-add]'); if (a) return newTicket(Number(a.dataset.add));
+  const nx = e.target.closest('[data-next]');
+  if (nx) { e.stopPropagation(); return run(async () => { await api(`/api/todos/${nx.dataset.next}/move`, { direction: 1 }); await loadBoard(); }); }
+  const b = e.target.closest('[data-btn]');
+  if (b) {
+    e.stopPropagation();
+    return run(async () => {
+      const r = await api(`/api/todos/${b.dataset.tid}/button`, { index: Number(b.dataset.btn) });
+      if (r.moved) toast('Moved to the next column');
+      await loadBoard();
+    });
+  }
+  const c = e.target.closest('[data-todo]');
+  if (c) openTicket(Number(c.dataset.todo));
+});
+// Drag a card to any column (mouse). On touch screens use › or the column list on the ticket.
+let dragId = null;
+$('#board').addEventListener('dragstart', (e) => {
+  const c = e.target.closest('[data-todo]'); if (!c) return;
+  dragId = Number(c.dataset.todo); c.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move';
+});
+$('#board').addEventListener('dragend', () => { dragId = null; $$('.dragging, .drop').forEach((x) => x.classList.remove('dragging', 'drop')); });
+$('#board').addEventListener('dragover', (e) => {
+  const col = e.target.closest('[data-col]'); if (!col || !dragId) return;
+  e.preventDefault(); $$('.drop').forEach((x) => x !== col && x.classList.remove('drop')); col.classList.add('drop');
+});
+$('#board').addEventListener('drop', (e) => {
+  const col = e.target.closest('[data-col]'); if (!col || !dragId) return;
+  e.preventDefault();
+  const id = dragId, t = todos.find((x) => x.id === id);
+  if (t && t.column_id === Number(col.dataset.col)) return;
+  run(async () => { await api(`/api/todos/${id}/move`, { column_id: Number(col.dataset.col) }); await loadBoard(); });
+});
+$('#search').addEventListener('input', renderBoard);
+$('#whoSel').addEventListener('change', renderBoard);
+$('#allDone').addEventListener('change', () => run(loadBoard));
+$('#newTodo').onclick = () => newTicket(cols[0] && cols[0].id);
+
+// ---------- the to-do ticket: everything is typed (or spoken) right here and saves as you go ----------
+let pending = {}, saveTimer = null, saveChain = Promise.resolve();
+let saveState = '';
+function setState(st) {
+  saveState = st;
+  const el = $('#saveState'); if (!el) return;
+  el.textContent = { typing: '…', saving: 'Saving…', saved: 'Saved ✓', error: 'Not saved ⚠', '': '' }[st] ?? st;
+}
+// A blank ticket. It is only created on the server once something is typed into it.
+function newTicket(columnId) {
+  const v = $('#whoSel').value;
+  const forWho = v === 'mine' && me.member ? me.member.id : (/^\d+$/.test(v) ? Number(v) : null);
+  cur = { id: null, column_id: columnId || cols[0].id, title: '', notes: '', member_id: forWho, due_date: null, priority: 'normal',
+    customer_name: '', customer_phone: '', job_address: '',
+    status_label: null, steps: [], history: [] };
+  openId = null;
+  showTicket();
+  setTimeout(() => $('#tTitle').focus(), 50);
+}
+async function openTicket(id) {
+  openId = id;
+  history.replaceState(null, '', '#todo-' + id);
+  const t = await run(() => api('/api/todos/' + id));
+  if (!t) { openId = null; history.replaceState(null, '', location.pathname); return; }
+  cur = t;
+  showTicket();
+}
+function showTicket() {
+  $('#ticket').hidden = false;
+  $('#tTitle').value = cur.title; $('#tNotes').value = cur.notes; $('#newStep').value = '';
+  $('#tCust').value = cur.customer_name || ''; $('#tPhone').value = cur.customer_phone || ''; $('#tAddr').value = cur.job_address || '';
+  custLinks();
+  fitTitle();
+  saveState = '';
+  renderTicket();
+}
+async function closeTicket() {
+  Voice.stop();
+  await flush();
+  // A step typed but not added yet gets added, so nothing typed is lost.
+  if ($('#newStep').value.trim()) await addStep();
+  openId = null; cur = null; $('#ticket').hidden = true;
+  if (document.activeElement) document.activeElement.blur();
+  Keys.hide();
+  history.replaceState(null, '', location.pathname);
+  run(loadBoard);
+}
+async function refreshTicket() {
+  if (!cur || !cur.id) return;
+  const t = await api('/api/todos/' + cur.id);
+  if (!cur || cur.id !== t.id) return;
+  // Keep what's being typed on this screen; take everything else from the server.
+  for (const k of Object.keys(pending)) t[k] = pending[k];
+  cur = t;
+  if (document.activeElement !== $('#tTitle') && !('title' in pending)) { $('#tTitle').value = t.title; fitTitle(); }
+  if (document.activeElement !== $('#tNotes') && !('notes' in pending)) $('#tNotes').value = t.notes;
+  for (const [id, k] of CUST) if (document.activeElement !== $(id) && !(k in pending)) $(id).value = t[k] || '';
+  custLinks();
+  renderTicket();
+}
+function colOf(t) { return cols.find((c) => c.id === t.column_id) || t.column || cols[0]; }
+function renderTicket() {
+  const t = cur, c = colOf(t);
+  const i = cols.findIndex((x) => x.id === c.id);
+  $('#ticket').setAttribute('style', colVars(c));
+  const btns = (c.buttons || []).map((b, k) => ({ ...b, k })).filter((b) => b.enabled);
+  $('#tHead').innerHTML = `<button type="button" id="tBack">← Board</button>${t.job_number ? `<b style="font-size:18px">#${t.job_number}</b>` : ''}
+    <select id="tCol" aria-label="Column">${cols.map((x) => `<option value="${x.id}" ${x.id === c.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
+    <div class="chips" style="margin:0">${btns.map((b) => `<button type="button" class="chip ${t.status_label === b.label ? 'on' : ''}" style="--b:${b.color || '#3b82f6'}" data-tbtn="${b.k}">${esc(b.label)}</button>`).join('')}</div>
+    <div class="spacer"></div><span id="saveState"></span>
+    ${i > 0 ? '<button type="button" id="tPrev" title="Move back a column">‹</button>' : ''}
+    ${i < cols.length - 1 ? `<button type="button" id="tNext" title="Move to ${esc(cols[i + 1].name)}">${esc(cols[i + 1].name)} ›</button>` : ''}
+    <button type="button" data-keys class="${Keys.isOn() ? 'on' : ''}" title="On-screen keyboard">⌨</button>
+    ${t.id ? `<button type="button" id="tDel" title="Delete this ${W.one}">🗑</button>` : ''}`;
+  setState(saveState); // the header was redrawn
+  renderSteps();
+  renderSide();
+}
+// The right-hand panel: who it's for, due date, priority, history.
+function renderSide() {
+  const t = cur;
+  // "This weekend" is today on Saturday or Sunday, otherwise the coming Saturday.
+  const dow = new Date().getDay(), today = isoDay(), sat = addDays(dow === 0 || dow === 6 ? 0 : 6 - dow);
+  $('#tSide').innerHTML = `
+    <label>For</label>
+    <div class="pick" id="pickWho"><button type="button" data-who="" class="${t.member_id ? '' : 'on'}">👥 Anyone</button>${members.map((m) =>
+      `<button type="button" data-who="${m.id}" class="${t.member_id === m.id ? 'on' : ''}" style="--mc:${m.color}"><i class="dot" style="--mc:${m.color}"></i>${esc(m.name)}</button>`).join('')}</div>
+    <label>Due ${t.due_date ? `· <span style="font-weight:700">${dueHtml(t.due_date, false).replace(/<[^>]+>/g, '') || shortDate(t.due_date)}</span>` : ''}</label>
+    <div class="pick" id="pickDue">
+      <button type="button" data-due="${today}" class="${t.due_date === today ? 'on' : ''}">Today</button>
+      <button type="button" data-due="${addDays(1)}" class="${t.due_date === addDays(1) ? 'on' : ''}">Tomorrow</button>
+      <button type="button" data-due="${sat}" class="${t.due_date === sat ? 'on' : ''}">This weekend</button>
+      <button type="button" data-due="${addDays(7)}" class="${t.due_date === addDays(7) ? 'on' : ''}">Next week</button>
+      ${t.due_date ? '<button type="button" data-due="">✕ No date</button>' : ''}</div>
+    <input type="date" id="dueDate" value="${t.due_date || ''}" aria-label="Pick a due date">
+    <label>Priority</label>
+    <div class="pick" id="pickPri"><button type="button" data-pri="normal" class="${t.priority !== 'high' ? 'on' : ''}">Normal</button>
+      <button type="button" data-pri="high" class="${t.priority === 'high' ? 'on' : ''}" style="--mc:#ef4444">⚑ High</button></div>
+    ${t.id ? `<h3>History</h3><div class="hist">${(t.history || []).map((h) => `<div>${esc(h.action)}<small>${esc(h.member_name || 'Someone')} · ${when(h.created_at)}</small></div>`).join('')}</div>`
+      : `<p class="muted" style="margin-top:20px;font-size:14px">Type what needs doing. It saves by itself.</p>`}`;
+}
+// Saving: typing is collected for a moment, then saved. Saves go one after another.
+function queue(key, value) {
+  pending[key] = value; cur[key] = value;
+  setState('typing');
+  clearTimeout(saveTimer); saveTimer = setTimeout(flush, 700);
+}
+function flush() {
+  clearTimeout(saveTimer);
+  const t = cur, body = pending; pending = {};
+  if (!t || (!Object.keys(body).length && t.id)) return saveChain;
+  saveChain = saveChain.then(() => save(t, body)).catch((e) => { toast(e.message, 'bad'); setState('error'); });
+  return saveChain;
+}
+async function save(t, body) {
+  if (!t.id) {
+    if (!hasContent(t)) { setState(''); return; }
+    setState('saving');
+    const r = await api('/api/todos', newBody(t));
+    t.id = r.id;
+    if (cur === t) { openId = r.id; history.replaceState(null, '', '#todo-' + r.id); await refreshTicket(); }
+  } else {
+    if (!Object.keys(body).length) return;
+    setState('saving');
+    await api('/api/todos/' + t.id, { ...body, screen: SCREEN }, 'PATCH');
+  }
+  if (cur === t) setState('saved');
+}
+const hasContent = (t) => [t.title, t.notes, t.customer_name].some((x) => (x || '').trim());
+const newBody = (t) => ({ title: t.title, notes: t.notes, member_id: t.member_id, due_date: t.due_date, priority: t.priority, column_id: t.column_id,
+  customer_name: t.customer_name || '', customer_phone: t.customer_phone || '', job_address: t.job_address || '' });
+// Makes sure the to-do / job exists on the server (for buttons, moving, steps).
+async function ensureSaved() {
+  await flush();
+  if (!cur.id) throw new Error('Type what needs doing first');
+}
+// Shop jobs: customer, phone (tap to call) and address (open in maps), saved as you type.
+const CUST = [['#tCust', 'customer_name'], ['#tPhone', 'customer_phone'], ['#tAddr', 'job_address']];
+for (const [id, k] of CUST) {
+  $(id).addEventListener('input', () => { queue(k, $(id).value); custLinks(); });
+  $(id).addEventListener('blur', flush);
+}
+function custLinks() {
+  const ph = $('#tPhone').value.trim(), ad = $('#tAddr').value.trim();
+  $('#tCall').href = ph ? 'tel:' + ph.replace(/[^\d+]/g, '') : '#'; $('#tCall').classList.toggle('off', !ph);
+  $('#tMap').href = ad ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(ad) : '#'; $('#tMap').classList.toggle('off', !ad);
+}
+function fitTitle() { const el = $('#tTitle'); el.style.height = 'auto'; el.style.height = el.scrollHeight + 2 + 'px'; }
+$('#tTitle').addEventListener('input', () => { fitTitle(); queue('title', $('#tTitle').value); });
+$('#tTitle').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#tNotes').focus(); } });
+$('#tNotes').addEventListener('input', () => queue('notes', $('#tNotes').value));
+$('#tTitle').addEventListener('blur', flush);
+$('#tNotes').addEventListener('blur', flush);
+// Details that save right away.
+async function setField(key, value) {
+  cur[key] = value;
+  renderSide();
+  if (!cur.id) { if (hasContent(cur)) await run(flush); return; }
+  pending[key] = value;
+  await flush();
+  await run(refreshTicket);
+}
+$('#tSide').addEventListener('click', (e) => {
+  const w = e.target.closest('[data-who]'); if (w) return setField('member_id', w.dataset.who ? Number(w.dataset.who) : null);
+  const d = e.target.closest('[data-due]'); if (d) return setField('due_date', d.dataset.due || null);
+  const p = e.target.closest('[data-pri]'); if (p) return setField('priority', p.dataset.pri);
+});
+$('#tSide').addEventListener('change', (e) => { if (e.target.id === 'dueDate') setField('due_date', e.target.value || null); });
+$('#tHead').addEventListener('click', (e) => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.id === 'tBack') return closeTicket();
+  if (t.id === 'tNext' || t.id === 'tPrev') return run(async () => {
+    await ensureSaved();
+    await api(`/api/todos/${cur.id}/move`, { direction: t.id === 'tNext' ? 1 : -1 });
+    await refreshTicket(); loadBoard();
+  });
+  if (t.id === 'tDel') return run(async () => {
+    if (!(await ask(`Delete "${cur.title || 'this ' + W.one}"? This can't be undone.`, 'Delete', true))) return;
+    clearTimeout(saveTimer); pending = {};
+    await api('/api/todos/' + cur.id, undefined, 'DELETE');
+    $('#newStep').value = '';
+    toast(`${W.One} deleted`); closeTicket();
+  });
+  if (t.dataset.tbtn) return run(async () => {
+    await ensureSaved();
+    const r = await api(`/api/todos/${cur.id}/button`, { index: Number(t.dataset.tbtn) });
+    if (r.moved) toast('Moved to the next column');
+    await refreshTicket(); loadBoard();
+  });
+});
+$('#tHead').addEventListener('change', (e) => {
+  if (e.target.id !== 'tCol') return;
+  const to = Number(e.target.value);
+  if (!cur.id) { cur.column_id = to; renderTicket(); return; }
+  run(async () => { await ensureSaved(); await api(`/api/todos/${cur.id}/move`, { column_id: to }); await refreshTicket(); loadBoard(); });
+});
+
+// ---------- checklist ----------
+let stepsStale = false;
+const stepTimers = {};
+function renderSteps() {
+  const t = cur;
+  // Don't redraw under someone typing in a step; redraw when they leave it.
+  if (document.activeElement && document.activeElement.matches('#steps input[type=text]')) { stepsStale = true; return; }
+  stepsStale = false;
+  const n = t.steps.length, d = t.steps.filter((s) => s.done).length;
+  $('#stepCount').textContent = n ? `${d} of ${n} done` : '';
+  $('#steps').innerHTML = t.steps.map((s) => `<div class="step ${s.done ? 'done' : ''}" data-sid="${s.id}">
+      <input type="checkbox" ${s.done ? 'checked' : ''} aria-label="Done">
+      <input type="text" id="step-${s.id}" maxlength="300" value="${esc(s.text)}">
+      <button type="button" class="mic" data-mic="step-${s.id}" title="Talk to type" style="width:42px;height:40px;font-size:17px">🎤</button>
+      <button type="button" class="x" title="Remove step">×</button></div>`).join('');
+}
+async function addStep() {
+  const v = $('#newStep').value.trim();
+  if (!v) { $('#newStep').focus(); return; }
+  await run(async () => {
+    await flush();
+    if (!cur.id) {
+      // First thing typed is a step: create the to-do with it.
+      const r = await api('/api/todos', { ...newBody(cur), steps: [v] });
+      cur.id = r.id; openId = r.id; history.replaceState(null, '', '#todo-' + r.id);
+    } else {
+      await api(`/api/todos/${cur.id}/steps`, { text: v });
+    }
+    $('#newStep').value = '';
+    await refreshTicket();
+  });
+}
+$('#addStep').onclick = () => { addStep().then(() => $('#newStep').focus()); };
+$('#newStep').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addStep(); } });
+const stepId = (el) => Number(el.closest('[data-sid]').dataset.sid);
+async function saveStep(id, body) {
+  await api(`/api/todos/${cur.id}/steps/${id}`, body, 'PATCH');
+}
+$('#steps').addEventListener('change', (e) => {
+  if (e.target.type !== 'checkbox') return;
+  const id = stepId(e.target), s = cur.steps.find((x) => x.id === id);
+  s.done = e.target.checked; e.target.closest('.step').classList.toggle('done', s.done);
+  $('#stepCount').textContent = `${cur.steps.filter((x) => x.done).length} of ${cur.steps.length} done`;
+  run(async () => { await saveStep(id, { done: s.done }); await refreshTicket(); });
+});
+$('#steps').addEventListener('input', (e) => {
+  if (e.target.type !== 'text') return;
+  const id = stepId(e.target), v = e.target.value;
+  const s = cur.steps.find((x) => x.id === id); if (s) s.text = v;
+  clearTimeout(stepTimers[id]);
+  if (v.trim()) stepTimers[id] = setTimeout(() => { delete stepTimers[id]; run(() => saveStep(id, { text: v })); }, 700);
+});
+$('#steps').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.type === 'text') { e.preventDefault(); $('#newStep').focus(); } });
+$('#steps').addEventListener('focusout', (e) => {
+  if (e.target.type !== 'text') return;
+  const id = stepId(e.target), v = e.target.value.trim();
+  setTimeout(async () => {
+    if (stepTimers[id]) { clearTimeout(stepTimers[id]); delete stepTimers[id]; if (v) await run(() => saveStep(id, { text: v })); }
+    // An emptied step is removed.
+    if (!v && cur && cur.steps.some((x) => x.id === id)) await run(() => api(`/api/todos/${cur.id}/steps/${id}`, undefined, 'DELETE'));
+    if (cur && (stepsStale || !v) && !(document.activeElement && document.activeElement.matches('#steps input[type=text]'))) await run(refreshTicket);
+  }, 150);
+});
+$('#steps').addEventListener('click', (e) => {
+  if (!e.target.closest('.x')) return;
+  const id = stepId(e.target);
+  run(async () => { await api(`/api/todos/${cur.id}/steps/${id}`, undefined, 'DELETE'); stepsStale = false; document.activeElement.blur(); await refreshTicket(); });
+});
+
+// ---------- column settings & board setup ----------
+const STD = { text_color: '#ffffff', bg_color: '#131c2e', card_color: '#18233a', card_text_color: '#e8eefc' };
+const THEMES = [
+  { name: 'Standard dark' },
+  { name: 'Light cards', card_color: '#ffffff', card_text_color: '#111827', bg_color: '#dfe5ee' },
+  { name: 'Blue', color: '#1d4ed8', bg_color: '#dbeafe', card_color: '#ffffff', card_text_color: '#1e3a8a' },
+  { name: 'Green', color: '#15803d', bg_color: '#dcfce7', card_color: '#ffffff', card_text_color: '#14532d' },
+  { name: 'Yellow', color: '#facc15', text_color: '#111827', bg_color: '#fef9c3', card_color: '#ffffff', card_text_color: '#713f12' },
+  { name: 'Orange', color: '#ea580c', bg_color: '#ffedd5', card_color: '#ffffff', card_text_color: '#7c2d12' },
+  { name: 'Red', color: '#dc2626', bg_color: '#fee2e2', card_color: '#ffffff', card_text_color: '#7f1d1d' },
+  { name: 'Purple', color: '#7e22ce', bg_color: '#f3e8ff', card_color: '#ffffff', card_text_color: '#3b0764' },
+];
+function columnSettings(id) {
+  const c = cols.find((x) => x.id === id); if (!c) return;
+  const b = [0, 1, 2].map((k) => (c.buttons || [])[k] || { label: '', enabled: false, action: 'mark', color: '#3b82f6' });
+  const f = openModal(`<h2>Customize column</h2>
+    <label>Column name</label><input name="name" required maxlength="40" value="${esc(c.name)}">
+    <label style="margin-top:14px">Colors</label>
+    <div class="colors">
+      <div><span>Header</span><input name="color" type="color" value="${c.color}" title="Header background"><input name="text_color" type="color" value="${c.text_color || STD.text_color}" title="Header lettering"><small>background · letters</small></div>
+      <div><span>Column</span><input name="bg_color" type="color" value="${c.bg_color || STD.bg_color}" title="Column background"><small>background</small></div>
+      <div><span>Cards</span><input name="card_color" type="color" value="${c.card_color || STD.card_color}" title="Card background"><input name="card_text_color" type="color" value="${c.card_text_color || STD.card_text_color}" title="Card lettering"><small>background · letters</small></div>
+    </div>
+    <div class="presets" id="themes">${THEMES.map((t, k) => `<button type="button" data-theme="${k}" style="background:${t.card_color || STD.card_color};color:${t.card_text_color || STD.card_text_color};border-left:6px solid ${t.color || c.color}">${esc(t.name)}</button>`).join('')}</div>
+    <label style="margin-top:16px">Card buttons</label><div class="muted" style="font-size:13px">Turn on up to three buttons and name them. "Mark + move" also sends the to-do to the next column.</div>
+    ${b.map((x, k) => `<div class="btnset"><div class="row">
+      <label class="check" style="margin:0"><input type="checkbox" name="en${k}" ${x.enabled ? 'checked' : ''}> ${k + 1}</label>
+      <input name="lb${k}" maxlength="24" value="${esc(x.label)}" placeholder="Button ${k + 1} name">
+      <input name="co${k}" type="color" value="${x.color || '#3b82f6'}" title="Button color"></div>
+      <div class="row2">
+        <label>When pressed<select name="ac${k}"><option value="mark">Just mark</option><option value="next" ${x.action === 'next' ? 'selected' : ''}>Mark + move to next column</option></select></label>
+        <label>Card goes to<select name="pl${k}"><option value="top" ${x.place === 'top' ? 'selected' : ''}>⬆ Top of column</option><option value="middle" ${!x.place || x.place === 'middle' ? 'selected' : ''}>Middle</option><option value="bottom" ${x.place === 'bottom' ? 'selected' : ''}>⬇ Bottom of column</option></select></label>
+      </div></div>`).join('')}
+    <div class="muted" style="font-size:12.5px;margin-top:6px">Cards sort themselves by the button they're marked with: top, then middle (and cards with no button pressed), then bottom. Press a lit button again to take the mark off.</div>
+    <label style="margin-top:14px">Card preview</label><div id="prev"></div>
+    <div class="actions"><button type="button" onclick="closeModal()">Cancel</button><button class="primary" id="saveCol">Save</button></div>`);
+  const read = () => [0, 1, 2].map((k) => ({ label: f['lb' + k].value.trim(), enabled: f['en' + k].checked && !!f['lb' + k].value.trim(), action: f['ac' + k].value, color: f['co' + k].value, place: f['pl' + k].value }))
+    .filter((x) => x.label);
+  // Optional colors that were set (unset ones keep the standard look).
+  const custom = { text_color: c.text_color, bg_color: c.bg_color, card_color: c.card_color, card_text_color: c.card_text_color };
+  Object.keys(custom).forEach((k) => f[k].addEventListener('input', () => { custom[k] = f[k].value; }));
+  $('#themes').onclick = (e) => {
+    const bt = e.target.closest('[data-theme]'); if (!bt) return;
+    const t = THEMES[Number(bt.dataset.theme)];
+    if (t.color) f.color.value = t.color;
+    for (const k of Object.keys(custom)) { custom[k] = t[k] || null; f[k].value = t[k] || STD[k]; }
+    prev();
+  };
+  const prev = () => {
+    const look = { color: f.color.value, ...Object.fromEntries(Object.entries(custom).map(([k, v]) => [k, v ? f[k].value : null])) };
+    $('#prev').innerHTML = `<section class="col" style="${colVars(look)};max-height:none;min-width:0">
+      <div class="colhead"><div><b>${esc(f.name.value.toUpperCase())}</b><small>2 to-dos</small></div></div>
+      <div class="cards"><div class="tc" style="cursor:default"><div class="t">Clean out the garage</div><div class="d">Boxes to the shop building</div>
+      <div class="m"><span class="who"><i class="dot" style="--mc:#3b82f6"></i>Peter</span><span>☑ 1/3</span></div>
+      <div class="chips">${read().filter((x) => x.enabled).map((x, i) => `<span class="chip ${i === 0 ? 'on' : ''}" style="--b:${x.color}">${esc(x.label)}</span>`).join('') || '<span class="muted" style="font-size:13px">No buttons</span>'}</div></div></div></section>`;
+  };
+  f.oninput = prev; f.onchange = prev; prev();
+  $('#saveCol').onclick = () => run(async () => {
+    if (!f.reportValidity()) return;
+    await api('/api/columns/' + id, { name: f.name.value, color: f.color.value, buttons: read(),
+      ...Object.fromEntries(Object.entries(custom).map(([k, v]) => [k, v ? f[k].value : ''])) }, 'PUT');
+    closeModal(); toast('Column saved'); await loadBoard();
+  });
+}
+function boardSetup() {
+  openModal(`<h2>Board setup</h2><p class="muted" style="margin:0 0 8px">Columns run left to right. ${W.One}s can go to any column. The last column is "done": ${W.many} there show when they were finished and drop off the board after 14 days.</p>
+    <div class="collist">${cols.map((c, i) => `<div><i style="--c:${c.color}"></i><b>${i + 1}. ${esc(c.name)}${i === cols.length - 1 ? ' <span class="muted" style="font-weight:500">(done)</span>' : ''}
+      <small class="muted" style="display:block;font-weight:500;font-size:12.5px">${(c.buttons || []).filter((x) => x.enabled).map((x) => esc(x.label) + (x.place === 'top' ? ' ⬆' : x.place === 'bottom' ? ' ⬇' : '')).join(' · ') || 'No buttons'}</small></b>
+      ${i > 0 ? `<button type="button" data-up="${c.id}" title="Move left">←</button>` : ''}
+      ${i < cols.length - 1 ? `<button type="button" data-down="${c.id}" title="Move right">→</button>` : ''}
+      <button type="button" data-edit="${c.id}" title="Colors and buttons">⚙</button>
+      ${cols.length > 2 ? `<button type="button" data-rm="${c.id}" title="Remove">🗑</button>` : ''}</div>`).join('')}</div>
+    <div class="addrow" style="margin-top:12px"><input id="newCol" maxlength="40" placeholder="New column, e.g. Shopping"><button type="button" class="primary" id="addCol">+ Add</button></div>
+    <div class="muted" style="font-size:12.5px;margin-top:4px">New columns go just before the last column.</div>
+    <div class="actions"><button type="button" onclick="closeModal()">Done</button></div>`);
+  $('#mBody').onclick = async (e) => {
+    const t = e.target.closest('button'); if (!t) return;
+    const d = t.dataset;
+    if (d.edit) return columnSettings(Number(d.edit));
+    if (d.up || d.down) return run(async () => { await api(`/api/columns/${d.up || d.down}/move`, { direction: d.up ? -1 : 1 }); await loadBoard(); boardSetup(); });
+    if (d.rm) {
+      const c = cols.find((x) => x.id === Number(d.rm));
+      const n = todos.filter((x) => x.column_id === c.id).length;
+      const to = cols.find((x) => x.id !== c.id);
+      if (!(await ask(`Remove the "${c.name}" column?` + (n ? ` Its ${plural(n)} will move to "${to.name}".` : ''), 'Remove', true))) return boardSetup();
+      return run(async () => { await api('/api/columns/' + d.rm, undefined, 'DELETE'); await loadBoard(); boardSetup(); });
+    }
+    if (t.id === 'addCol') return run(async () => {
+      const name = $('#newCol').value.trim(); if (!name) throw new Error('Type a name for the column');
+      await api('/api/columns', { name }); await loadBoard(); boardSetup();
+    });
+  };
+  $('#newCol').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#addCol').click(); } });
+}
+$('#setupBtn').onclick = boardSetup;
+
+// ---------- family & house ----------
+const COLORS = ['#3b82f6', '#ec4899', '#22c55e', '#f59e0b', '#a855f7', '#14b8a6', '#ef4444', '#64748b'];
+function familyDialog() {
+  const f = openModal(`<h2>${W.pIcon} ${W.people}</h2><div class="muted" style="font-size:14px">Everyone shares the ${W.place} sign-in and picks their name on each screen.</div>
+    <div id="mlist">${members.map((m) => `<div class="mrow" data-mid="${m.id}"><input type="color" value="${m.color}"><input type="text" maxlength="40" value="${esc(m.name)}">
+      <button type="button" class="primary" data-save>Save</button><button type="button" data-del title="Remove">🗑</button></div>`).join('')}</div>
+    <div class="addrow" style="margin-top:10px"><input id="newMem" type="text" maxlength="40" placeholder="Add a person"><button type="button" class="primary" id="addMem">+ Add</button></div>
+    <hr><label>Name of this ${W.place}</label><div class="addrow"><input id="houseName" type="text" maxlength="80" value="${esc(me.household.name)}"><button type="button" id="saveHouse">Save</button></div>
+    ${me.admin ? '<div class="muted" style="font-size:13px;margin-top:10px">You are viewing this account as admin. Its sign-in and password are changed on the admin page.</div>' : `<label>Change the ${W.place} password</label>
+    <div class="two"><input id="pwCur" type="password" placeholder="Current password" autocomplete="current-password"><input id="pwNew" type="password" placeholder="New (8+ characters)" autocomplete="new-password"></div>
+    <button type="button" id="savePw" style="margin-top:8px">Change password</button>
+    <div class="muted" style="font-size:13px;margin-top:6px">Signed in as ${esc(me.email)}</div>`}
+    <div class="actions">${me.admin ? '' : '<button type="button" class="danger" id="logoutBtn" style="margin-right:auto">Sign out this screen</button>'}<button type="button" onclick="closeModal()">Done</button></div>`);
+  f.onclick = async (e) => {
+    const t = e.target.closest('button'); if (!t) return;
+    const row = t.closest('[data-mid]');
+    if (row && 'save' in t.dataset) return run(async () => {
+      await api('/api/members/' + row.dataset.mid, { name: row.querySelector('input[type=text]').value, color: row.querySelector('input[type=color]').value }, 'PUT');
+      await reloadMe(); toast('Saved'); familyDialog();
+    });
+    if (row && 'del' in t.dataset) {
+      const m = memberById(Number(row.dataset.mid));
+      if (!(await ask(`Remove ${m.name}? Their to-dos stay on the board, marked "for anyone".`, 'Remove', true))) return familyDialog();
+      return run(async () => { await api('/api/members/' + m.id, undefined, 'DELETE'); await reloadMe(); familyDialog(); });
+    }
+    if (t.id === 'addMem') return run(async () => {
+      const name = $('#newMem').value.trim(); if (!name) throw new Error('Type a name');
+      await api('/api/members', { name, color: COLORS[members.length % COLORS.length] }); await reloadMe(); familyDialog();
+    });
+    if (t.id === 'saveHouse') return run(async () => { await api('/api/household', { name: $('#houseName').value }, 'PUT'); await reloadMe(); toast('Saved'); });
+    if (t.id === 'savePw') return run(async () => {
+      await api('/api/password', { current: $('#pwCur').value, password: $('#pwNew').value });
+      $('#pwCur').value = $('#pwNew').value = ''; toast('Password changed. Other screens need to sign in again.');
+    });
+    if (t.id === 'logoutBtn') { if (await ask('Sign out this screen?', 'Sign out')) logout(); else familyDialog(); }
+  };
+  $('#newMem').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#addMem').click(); } });
+}
+$('#familyBtn').onclick = familyDialog;
+async function reloadMe() {
+  me = await api('/api/me'); members = me.members;
+  applyAccount();
+  showMe(); await loadBoard();
+}
+// Name, icon, words and the admin bar for this account's kind of screen.
+function applyAccount() {
+  isShop = me.account.screen === 'shop';
+  W = WORDS[me.account.screen] || WORDS.todo;
+  $('#house').textContent = me.household.name; $('#bIcon').textContent = W.icon;
+  document.title = me.household.name + ' · ' + me.app_name;
+  $('#newTodo').textContent = `+ New ${W.one}`;
+  $('#search').placeholder = `Search ${W.many}…`;
+  $('#tTitle').placeholder = W.title;
+  $('#pIcon').textContent = W.pIcon; $('#pLabel').textContent = ' ' + W.people;
+  $('#custBox').hidden = !isShop;
+  $('#adminBar').hidden = !me.admin;
+  if (me.admin) {
+    $('#abName').textContent = `${me.household.name} (${me.account.screen_label})`;
+    $('#abOff').innerHTML = me.account.active ? '' : '<span class="off">SWITCHED OFF</span>';
+  }
+}
+$('#abBack').onclick = () => run(async () => { await api('/api/admin/leave', {}); location.href = '/admin#' + me.account.screen; });
+// A message instead of the board (account switched off, or a screen that isn't here yet).
+function fullMessage(title, body, buttons) {
+  $('#board').innerHTML = `<div class="fullmsg"><h2>${title}</h2><p class="muted">${body}</p>${buttons || ''}</div>`;
+  $('#counts').innerHTML = '';
+  $$('.top > *:not(.brand)').forEach((x) => { x.hidden = true; });
+}
+
+// ---------- live updates from other screens ----------
+let reloadTimer;
+function listen() {
+  const es = new EventSource('/api/events');
+  es.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.type === 'hello') return;
+    if (m.type === 'todo' && m.by === SCREEN) return; // our own typing
+    if (m.type === 'account') { location.reload(); return; } // switched on/off or changed by the admin
+    clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(async () => {
+      if (m.type === 'members') { await run(reloadMe); if (cur) renderTicket(); return; }
+      await loadBoard().catch(() => {});
+      if (cur && cur.id) {
+        if (m.type === 'todo' && m.deleted && m.id === cur.id) { toast('This to-do was deleted on another screen', 'bad'); pending = {}; $('#newStep').value = ''; closeTicket(); }
+        else if (m.type === 'columns' || m.id === cur.id) refreshTicket().catch(() => {});
+      }
+    }, 250);
+  };
+}
+function tick() { $('#clock').textContent = new Date().toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+
+(async () => {
+  try { me = await api('/api/me'); } catch (e) {
+    if (/switched off/.test(e.message)) {
+      setTimeout(() => location.reload(), 30000); // comes back by itself when switched on again
+      return fullMessage('⏸ This account is switched off', esc(e.message) + ' This screen comes back by itself when it is switched on again.', '<button onclick="logout()">Sign out</button>');
+    }
+    throw e;
+  }
+  members = me.members;
+  applyAccount();
+  if (me.account.screen === 'store') { location.href = '/'; return; } // Store Orders accounts use the store screen
+  showMe(); Keys.refresh();
+  tick(); setInterval(tick, 30000);
+  await loadBoard();
+  listen();
+  if (!me.member && !me.admin) whoPicker();
+  const h = /^#todo-(\d+)$/.exec(location.hash);
+  if (h) openTicket(Number(h[1]));
+  // Days change at midnight: redraw "due today" and "overdue".
+  setInterval(() => { if (!cur) renderBoard(); }, 5 * 60000);
+})().catch((e) => toast(e.message, 'bad'));
+</script>
+</body>
+</html>
