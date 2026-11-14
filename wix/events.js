@@ -4,6 +4,7 @@
 // replacing it.
 //
 // Also add a secret in the Wix dashboard: Developer Tools -> Secrets Manager
+// (copy the value with "Copy Wix webhook address" on the admin page, Store Orders tab)
 //   Name:  STORE_ORDERS_WEBHOOK_URL
 //   Value: https://YOUR-RENDER-SERVICE.onrender.com/webhook/wix-order?token=YOUR_WEBHOOK_TOKEN
 //
