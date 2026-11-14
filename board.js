@@ -25,6 +25,16 @@ const niceDate = (d) => `${MONTHS[Number(d.slice(5, 7)) - 1]} ${Number(d.slice(8
 module.exports = function setupBoard(app, deps) {
   const { pool, wrap, fail, text, cleanColor, requireLogin } = deps;
   const L = [requireLogin];
+  // Other parts of the program can act before a to-do / job is deleted (QuickBooks removes its invoice),
+  // and hear when a job changed (QuickBooks updates it).
+  const hooks = { beforeDelete: [], changed: [] };
+  // Moving a job (e.g. into the last column) can matter to QuickBooks too.
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' && /^\/api\/todos\/\d+(\/move|\/button)?$/.test(req.path)) res.on('finish', () => {
+      if (res.statusCode < 400 && req.household_id) for (const h of hooks.changed) h(req.household_id);
+    });
+    next();
+  });
 
   // ---------- live updates: every open board in a house hears about changes ----------
   const listeners = new Map(); // householdId -> Set(res)
@@ -134,7 +144,7 @@ module.exports = function setupBoard(app, deps) {
     }
     const { rows } = await pool.query(
       `SELECT t.id, t.column_id, t.title, t.notes, t.member_id, t.due_date, t.priority, t.status_label,
-              t.job_number, t.customer_name, t.customer_phone, t.job_address,
+              t.job_number, t.customer_name, t.customer_phone, t.job_address, t.customer_email,
               t.column_entered_at, t.done_at, t.created_at, t.updated_at,
               (SELECT count(*) FROM todo_steps s WHERE s.todo_id = t.id)::int AS steps,
               (SELECT count(*) FROM todo_steps s WHERE s.todo_id = t.id AND s.done)::int AS steps_done
@@ -219,6 +229,16 @@ module.exports = function setupBoard(app, deps) {
     if ('customer_name' in b) f.customer_name = text(b.customer_name, 'Customer', { required: false, max: 120 }) || null;
     if ('customer_phone' in b) f.customer_phone = text(b.customer_phone, 'Phone', { required: false, max: 40 }) || null;
     if ('job_address' in b) f.job_address = text(b.job_address, 'Address', { required: false, max: 300 }) || null;
+    if ('customer_email' in b) f.customer_email = text(b.customer_email, 'Email', { required: false, max: 200 }).toLowerCase() || null;
+    // Papa's Shop: the customer from the customer list (null = not linked).
+    if ('customer_id' in b) {
+      f.customer_id = null;
+      if (b.customer_id) {
+        const c = await db.query('SELECT id FROM customers WHERE id=$1 AND household_id=$2 AND active', [Number(b.customer_id) || 0, req.household_id]);
+        if (!c.rows[0]) fail(404, 'Customer not found');
+        f.customer_id = c.rows[0].id;
+      }
+    }
     return f;
   }
 
@@ -238,10 +258,10 @@ module.exports = function setupBoard(app, deps) {
       }
       const r = await db.query(
         `INSERT INTO todos (household_id, column_id, title, notes, member_id, due_date, priority, done_at, created_by,
-           job_number, customer_name, customer_phone, job_address)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id, job_number`,
+           job_number, customer_name, customer_phone, job_address, customer_email, customer_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id, job_number`,
         [req.household_id, col.id, f.title || '', f.notes || '', f.member_id || null, f.due_date || null, f.priority || 'normal',
-          isDone ? new Date() : null, who(req).id, jobNumber, f.customer_name || null, f.customer_phone || null, f.job_address || null]);
+          isDone ? new Date() : null, who(req).id, jobNumber, f.customer_name || null, f.customer_phone || null, f.job_address || null, f.customer_email || null, f.customer_id || null]);
       for (const [i, s] of steps.entries()) await db.query('INSERT INTO todo_steps (todo_id, text, position) VALUES ($1,$2,$3)', [r.rows[0].id, s, i + 1]);
       await log(db, r.rows[0].id, req, `Created in ${col.name}`);
       return r.rows[0];
@@ -273,7 +293,7 @@ module.exports = function setupBoard(app, deps) {
         await log(db, todo.id, req, m ? `For ${m.name}` : 'For anyone');
       }
       if ('due_date' in f && (f.due_date || null) !== (todo.due_date || null)) await log(db, todo.id, req, f.due_date ? `Due ${niceDate(f.due_date)}` : 'Due date removed');
-      if (['customer_name', 'customer_phone', 'job_address'].some((k) => k in f && (f[k] || null) !== (todo[k] || null))) await logEdit(db, todo.id, req, 'Edited the customer details');
+      if (['customer_name', 'customer_phone', 'job_address', 'customer_email'].some((k) => k in f && (f[k] || null) !== (todo[k] || null))) await logEdit(db, todo.id, req, 'Edited the customer details');
       if ('priority' in f && f.priority !== todo.priority) await log(db, todo.id, req, f.priority === 'high' ? 'Marked high priority' : 'Priority set to normal');
     });
     notify(req.household_id, { type: 'todo', id: Number(req.params.id), by: req.body.screen || null });
@@ -281,8 +301,12 @@ module.exports = function setupBoard(app, deps) {
   }));
 
   app.delete('/api/todos/:id', ...L, wrap(async (req, res) => {
-    const r = await pool.query('DELETE FROM todos WHERE id=$1 AND household_id=$2 RETURNING id', [Number(req.params.id) || 0, req.household_id]);
+    const r = await withTx(async (db) => {
+      for (const h of hooks.beforeDelete) await h(db, Number(req.params.id) || 0, req.household_id);
+      return db.query('DELETE FROM todos WHERE id=$1 AND household_id=$2 RETURNING id', [Number(req.params.id) || 0, req.household_id]);
+    });
     if (!r.rows[0]) fail(404, 'That to-do was not found');
+    for (const h of hooks.changed) h(req.household_id);
     notify(req.household_id, { type: 'todo', id: Number(req.params.id), deleted: true });
     res.json({ ok: true });
   }));
@@ -371,5 +395,5 @@ module.exports = function setupBoard(app, deps) {
     res.json({ ok: true });
   }));
 
-  return { notify };
+  return { notify, hooks };
 };
