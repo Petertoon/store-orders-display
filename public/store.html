@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Store Orders</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%9B%92%3C/text%3E%3C/svg%3E">
+<meta name="theme-color" content="#171a21"><meta name="mobile-web-app-capable" content="yes">
 <style>
   :root {
     --bg: #0f1115; --panel: #171a21; --card: #1f232c; --line: #2c313c;
@@ -62,6 +64,7 @@
   .printed { font-size: 13px; color: var(--ready); margin-left: 8px; }
   .noprint { font-size: 13px; color: var(--late); margin-left: 8px; }
   .empty { color: var(--muted); text-align: center; margin-top: 40px; }
+  #clock, .bellbtn { white-space: nowrap; }
   .bellbtn { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 700; padding: 7px 12px;
     border-radius: 99px; border: 1px solid var(--line); background: #2d3340; color: var(--muted); cursor: pointer; }
   .bellbtn svg { width: 18px; height: 18px; }
@@ -79,11 +82,20 @@
   #overlay small { color: var(--muted); font-size: 15px; margin-top: 10px; }
   #error { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
     font-size: 20px; color: var(--late); background: var(--bg); text-align: center; padding: 20px; }
+  .out { font-size: 14px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
+  #adminbar { display: none; align-items: center; gap: 10px; padding: 8px 16px; background: #3b2a05; color: #fde68a; font-size: 15px; }
+  #adminbar button { padding: 6px 12px; border: 0; border-radius: 8px; background: #fde68a; color: #3b2a05; font-weight: 700; cursor: pointer; }
+  body.admin #adminbar { display: flex; }
+  body.admin main { height: calc(100% - 56px - 42px); }
+  body.admin.alerting main { height: calc(100% - 56px - 42px - 66px); }
+  #error button { margin-top: 16px; font-size: 16px; padding: 10px 18px; border: 0; border-radius: 8px; cursor: pointer; }
   @media (max-width: 760px) {
     main { flex-direction: column; height: auto; }
     .col { border-right: 0; border-bottom: 1px solid var(--line); }
     .list { overflow: visible; }
     .meta > :not(#clock):not(#bellbtn) { display: none; }
+    header { gap: 8px; } .brand { font-size: 18px; min-width: 0; } .meta > * { margin-left: 10px; }
+    #clock { font-size: 18px; }
   }
 </style>
 </head>
@@ -94,8 +106,10 @@
     <button class="bellbtn" id="bellbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span>Bell on</span></button>
     <span class="conn" id="conn"><i></i><span>Connecting</span></span>
     <span id="clock">--:--</span>
+    <button class="out" id="outbtn" type="button" title="Sign out this screen">Sign out</button>
   </div>
 </header>
+<div id="adminbar">👁 Admin view of <b id="abname"></b><span style="flex:1"></span><button type="button" id="abback">← Back to admin</button></div>
 <div id="alert" role="alert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span id="alerttext">New order</span><small>Tap to stop</small></div>
 <main>
   <section class="col" data-s="new"><h2>New <span class="count" id="c-new">0</span></h2><div class="list" id="l-new"></div></section>
@@ -107,31 +121,41 @@
 <script>
 (function () {
   var qs = new URLSearchParams(location.search);
-  var STORE = qs.get('store'), KEY = qs.get('key');
+  var STORE = null; // this store's id, from the signed-in account
   var LATE_MIN = Number(qs.get('late') || 15);   // minutes before a ticket turns red
   var tickets = {}, printed = {}, store = null, audioCtx = null, confirmTimer = null;
 
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-  function fail(msg) { $('error').style.display = 'flex'; $('error').textContent = msg; }
+  function fail(msg, button) {
+    $('error').style.display = 'flex'; $('error').style.flexDirection = 'column';
+    $('error').innerHTML = '<div>' + esc(msg) + '</div>' + (button || '');
+    $('overlay').style.display = 'none';
+  }
+  // Same-origin calls with this screen's sign-in.
   function api(path, opts) {
     opts = opts || {};
-    opts.headers = Object.assign({ 'Content-Type': 'application/json', 'x-key': KEY }, opts.headers || {});
+    opts.headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+    opts.credentials = 'same-origin';
     return fetch(path, opts).then(function (r) {
-      if (!r.ok) throw new Error(r.status);
-      return r.json();
+      if (r.status === 401) { location.href = '/login'; throw new Error('Please sign in'); }
+      return r.json().catch(function () { return {}; }).then(function (d) {
+        if (!r.ok) { var e = new Error((d && d.error) || r.status); e.status = r.status; throw e; }
+        return d;
+      });
     });
   }
-
-  if (!STORE || !KEY) return fail('This screen link is missing its store or key. Copy the link from the master screen.');
+  function signOut() { api('/api/logout', { method: 'POST', body: '{}' }).then(function () { location.href = '/login'; }, function () { location.href = '/login'; }); }
+  $('outbtn').onclick = function () { if (confirm('Sign out this screen?')) signOut(); };
+  $('abback').onclick = function () { api('/api/admin/leave', { method: 'POST', body: '{}' }).then(function () { location.href = '/admin#store'; }); };
 
   $('overlay').onclick = function () {
     unlockAudio();
     $('overlay').style.display = 'none';
   };
   // ---- bell ----
-  var BELL_KEY = 'storeBell:' + STORE, RING_EVERY_MS = 3000;
+  var BELL_KEY = 'storeBell', RING_EVERY_MS = 3000; // remembered per screen
   var bellOn = true, ringTimer = null, ringing = {}; // ringing: ticketId -> orderNumber
   try { bellOn = localStorage.getItem(BELL_KEY) !== 'off'; } catch (e) {}
 
@@ -236,7 +260,7 @@
     var id = b.getAttribute('data-id');
     if (b.getAttribute('data-reprint')) {
       b.textContent = 'Sending…';
-      api('/api/tickets/' + encodeURIComponent(id) + '/reprint', { method: 'POST', body: '{}' })
+      api('/api/store/tickets/' + encodeURIComponent(id) + '/reprint', { method: 'POST', body: '{}' })
         .then(function () { b.textContent = 'Sent'; }, function () { b.textContent = 'Failed'; });
       return;
     }
@@ -248,7 +272,7 @@
       return;
     }
     b.disabled = true;
-    api('/api/tickets/' + encodeURIComponent(id) + '/status', { method: 'POST', body: JSON.stringify({ status: next }) })
+    api('/api/store/tickets/' + encodeURIComponent(id) + '/status', { method: 'POST', body: JSON.stringify({ status: next }) })
       .then(upsert, function () { b.disabled = false; alert('Could not update — check the connection.'); });
   });
 
@@ -267,7 +291,7 @@
   }
 
   function load() {
-    return api('/api/tickets?store=' + encodeURIComponent(STORE)).then(function (list) {
+    return api('/api/store/tickets').then(function (list) {
       tickets = {};
       list.forEach(function (t) {
         var missed = !firstLoad && !seen[t.id] && t.status === 'new';
@@ -281,20 +305,23 @@
     });
   }
 
+  // Live feed for this account: new orders, status changes from other screens, "printed", and admin changes.
   function connect() {
-    var es = new EventSource('/stream?store=' + encodeURIComponent(STORE) + '&key=' + encodeURIComponent(KEY));
+    var es = new EventSource('/api/events');
     es.onopen = function () {
       $('conn').className = 'conn ok'; $('conn').lastChild.textContent = 'Live';
       load(); // catch anything missed while disconnected
     };
     es.onerror = function () { $('conn').className = 'conn'; $('conn').lastChild.textContent = 'Reconnecting'; };
-    es.addEventListener('ticket', function (e) { upsert(JSON.parse(e.data)); });
-    es.addEventListener('printed', function (e) {
-      var d = JSON.parse(e.data); printed[d.ticketId] = true; render();
-    });
+    es.onmessage = function (e) {
+      var m = JSON.parse(e.data);
+      if (m.type === 'ticket' && m.ticket) upsert(m.ticket);
+      else if (m.type === 'printed') { printed[m.ticketId] = true; render(); }
+      else if (m.type === 'account') location.reload(); // switched off, renamed or changed by the admin
+    };
   }
 
-  setInterval(function () {
+  function tick() {
     $('clock').textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     var nodes = document.querySelectorAll('.timer[data-at]');
     for (var i = 0; i < nodes.length; i++) {
@@ -303,16 +330,30 @@
       var tk = nodes[i].closest('.ticket');
       if (e.m >= LATE_MIN && !tk.classList.contains('ready')) tk.classList.add('late');
     }
-  }, 1000);
+  }
+  tick(); setInterval(tick, 1000);
 
-  api('/api/store-info?store=' + encodeURIComponent(STORE)).then(function (s) {
-    store = s;
+  api('/api/me').then(function (me) {
+    if (me.admin) {
+      document.body.classList.add('admin'); $('abname').textContent = me.household.name + ' (Store Orders)' + (me.account.active ? '' : ' · SWITCHED OFF');
+      $('outbtn').style.display = 'none'; $('overlay').style.display = 'none';
+    }
+    return api('/api/store/info');
+  }).then(function (s) {
+    store = s; STORE = s.id;
     $('sname').textContent = s.name; document.title = s.name + ' · Orders';
     $('dot').style.background = s.color || '';
     document.documentElement.style.setProperty('--accent', s.color || '#f59e0b');
-    if (s.display === false) return fail('The screen is turned off for this store in stores.json.');
+    renderBell();
     connect();
-  }, function () { fail('This screen link is not valid. Copy the link again from the master screen.'); });
+  }, function (e) {
+    if (/switched off/.test(e.message)) {
+      setTimeout(function () { location.reload(); }, 30000); // comes back by itself when switched on again
+      return fail('⏸ This store is switched off. Contact the administrator. This screen comes back by itself when it is switched on again.',
+        '<button type="button" onclick="this.disabled=true;fetch(\'/api/logout\',{method:\'POST\'}).then(function(){location.href=\'/login\'})">Sign out</button>');
+    }
+    fail(e.message || 'This screen could not load.');
+  });
 })();
 </script>
 </body>
