@@ -87,7 +87,7 @@ const requireLogin = wrap(async (req, res, next) => {
   if (!req.login) fail(401, 'Please sign in');
   const hid = req.login.is_admin ? req.login.acting_household_id : req.login.household_id;
   if (!hid) fail(400, 'Open an account from the admin page first');
-  const a = await pool.query('SELECT id, name, screen, active FROM households WHERE id=$1', [hid]);
+  const a = await pool.query('SELECT id, name, screen, active, qbo_on FROM households WHERE id=$1', [hid]);
   if (!a.rows[0]) fail(400, 'Open an account from the admin page first');
   if (!a.rows[0].active && !req.login.is_admin) fail(403, 'This account is switched off. Contact the administrator.');
   req.account = a.rows[0];
@@ -143,13 +143,13 @@ app.post('/api/login', wrap(async (req, res) => {
   const email = text(req.body.email, 'Email').toLowerCase();
   checkLoginRate(email + '|' + req.ip);
   const { rows } = await pool.query(
-    'SELECT l.*, h.active FROM logins l LEFT JOIN households h ON h.id = l.household_id WHERE l.email=$1', [email]);
+    'SELECT l.*, h.active, h.screen FROM logins l LEFT JOIN households h ON h.id = l.household_id WHERE l.email=$1', [email]);
   const ok = rows[0] && (await bcrypt.compare(String(req.body.password || ''), rows[0].password_hash));
   if (!ok) fail(401, 'Wrong email or password');
   if (!rows[0].is_admin && rows[0].active === false) fail(403, 'This account is switched off. Contact the administrator.');
   await startSession(res, rows[0].id);
   res.clearCookie(MEMBER_COOKIE);
-  res.json({ ok: true, admin: rows[0].is_admin });
+  res.json({ ok: true, admin: rows[0].is_admin, screen: rows[0].is_admin ? null : rows[0].screen });
 }));
 
 app.post('/api/logout', wrap(async (req, res) => {
@@ -220,7 +220,7 @@ app.delete('/api/members/:id', requireLogin, wrap(async (req, res) => {
 const A = [requireSignIn, requireAdmin];
 app.get('/api/admin/accounts', ...A, wrap(async (req, res) => {
   const { rows } = await pool.query(`
-    SELECT h.id, h.name, h.screen, h.active, h.created_at,
+    SELECT h.id, h.name, h.screen, h.active, h.qbo_on, h.created_at,
       (SELECT l.email FROM logins l WHERE l.household_id = h.id ORDER BY l.id LIMIT 1) AS email,
       (SELECT count(*) FROM members m WHERE m.household_id = h.id AND m.active)::int AS people,
       (SELECT count(*) FROM todos t WHERE t.household_id = h.id AND t.done_at IS NULL)::int AS open_items,
@@ -261,7 +261,8 @@ app.put('/api/admin/accounts/:id', ...A, wrap(async (req, res) => {
     const name = 'name' in req.body ? text(req.body.name, 'Account name', { max: 80 }) : a.name;
     const screen = 'screen' in req.body ? cleanScreen(req.body.screen) : a.screen;
     const active = 'active' in req.body ? !!req.body.active : a.active;
-    await db.query('UPDATE households SET name=$1, screen=$2, active=$3 WHERE id=$4', [name, screen, active, id]);
+    const qboOn = 'qbo_on' in req.body ? !!req.body.qbo_on : a.qbo_on;
+    await db.query('UPDATE households SET name=$1, screen=$2, active=$3, qbo_on=$4 WHERE id=$5', [name, screen, active, qboOn, id]);
     // Store Orders accounts: their store settings (needed the first time an account moves to the Store Orders tab).
     if (screen === 'store' && (req.body.store || !(await stores.settingsFor(id, db)))) await stores.saveSettings(db, id, name, req.body.store || {});
     if (req.body.email) {
@@ -277,6 +278,7 @@ app.put('/api/admin/accounts/:id', ...A, wrap(async (req, res) => {
     // Switching off keeps screens signed in: they show "switched off" and come back when it's switched on again.
   });
   board.notify(id, { type: 'account' });
+  if (req.body.qbo_on) qbo.sync(id).catch(() => {}); // switched on: send anything waiting
   res.json({ ok: true });
 }));
 app.delete('/api/admin/accounts/:id', ...A, wrap(async (req, res) => {
@@ -338,6 +340,9 @@ app.put('/api/admin/brand', requireSignIn, requireAdmin, wrap(async (req, res) =
 
 // ---------- pages ----------
 const page = (f) => (req, res) => res.sendFile(path.join(__dirname, 'public', f));
+// A sign-in page per screen to hand out: /login/mama, /login/shop, /login/store (the page shows that screen's name and colors).
+const LOGIN_KINDS = { todo: 'todo', mama: 'todo', shop: 'shop', papa: 'shop', store: 'store' };
+app.get('/login/:kind', (req, res) => (LOGIN_KINDS[String(req.params.kind).toLowerCase()] ? page('login.html')(req, res) : res.redirect('/login')));
 app.get('/', wrap(async (req, res) => {
   if (!(await adminExists())) return res.redirect('/setup');
   const l = await loadLogin(req);
