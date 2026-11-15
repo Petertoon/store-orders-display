@@ -120,6 +120,10 @@
 <div id="error"></div>
 <script src="/brand.js"></script>
 <script>
+// The sign-in page this screen came from (/login/store), so signing out goes back to it.
+function hbLogin() { try { var p = localStorage.getItem('hb_login'); if (p && /^\/login(\/[a-z]+)?$/.test(p)) return p; } catch (e) { /* ok */ } return '/login'; }
+</script>
+<script>
 (function () {
   var qs = new URLSearchParams(location.search);
   var STORE = null; // this store's id, from the signed-in account
@@ -140,14 +144,14 @@
     opts.headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
     opts.credentials = 'same-origin';
     return fetch(path, opts).then(function (r) {
-      if (r.status === 401) { location.href = '/login'; throw new Error('Please sign in'); }
+      if (r.status === 401) { location.href = hbLogin(); throw new Error('Please sign in'); }
       return r.json().catch(function () { return {}; }).then(function (d) {
         if (!r.ok) { var e = new Error((d && d.error) || r.status); e.status = r.status; throw e; }
         return d;
       });
     });
   }
-  function signOut() { api('/api/logout', { method: 'POST', body: '{}' }).then(function () { location.href = '/login'; }, function () { location.href = '/login'; }); }
+  function signOut() { api('/api/logout', { method: 'POST', body: '{}' }).then(function () { location.href = hbLogin(); }, function () { location.href = hbLogin(); }); }
   $('outbtn').onclick = function () { if (confirm('Sign out this screen?')) signOut(); };
   $('abback').onclick = function () { api('/api/admin/leave', { method: 'POST', body: '{}' }).then(function () { location.href = '/admin#store'; }); };
 
@@ -351,7 +355,7 @@
     if (/switched off/.test(e.message)) {
       setTimeout(function () { location.reload(); }, 30000); // comes back by itself when switched on again
       return fail('⏸ This store is switched off. Contact the administrator. This screen comes back by itself when it is switched on again.',
-        '<button type="button" onclick="this.disabled=true;fetch(\'/api/logout\',{method:\'POST\'}).then(function(){location.href=\'/login\'})">Sign out</button>');
+        '<button type="button" onclick="this.disabled=true;fetch(\'/api/logout\',{method:\'POST\'}).then(function(){location.href=hbLogin()})">Sign out</button>');
     }
     fail(e.message || 'This screen could not load.');
   });
