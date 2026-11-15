@@ -101,7 +101,7 @@
 </head>
 <body>
 <header>
-  <div class="brand"><span class="dot" id="dot"></span><span id="sname">Loading…</span></div>
+  <div class="brand"><span data-brand></span><span class="dot" id="dot"></span><span id="sname">Loading…</span></div>
   <div class="meta">
     <button class="bellbtn" id="bellbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span>Bell on</span></button>
     <span class="conn" id="conn"><i></i><span>Connecting</span></span>
@@ -118,6 +118,7 @@
 </main>
 <div id="overlay">Tap to start<small>Turns on the new-order bell</small></div>
 <div id="error"></div>
+<script src="/brand.js"></script>
 <script>
 (function () {
   var qs = new URLSearchParams(location.search);
