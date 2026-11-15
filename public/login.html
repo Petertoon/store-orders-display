@@ -9,7 +9,7 @@
 </head>
 <body>
 <form class="auth" id="f">
-  <h1 id="app">Sign in</h1>
+  <div style="display:flex;align-items:center"><span data-brand></span><h1 id="app" style="margin:0">Sign in</h1></div>
   <div class="muted">Sign in to your board</div>
   <label for="email">Email</label>
   <input id="email" type="email" autocomplete="username" required>
@@ -19,6 +19,7 @@
   <div class="err" id="err"></div>
 </form>
 <script src="/app.js"></script>
+<script src="/brand.js"></script>
 <script>
 api('/api/setup-status').then((s) => { if (s.needs_setup) location.href = '/setup'; $('#app').textContent = s.app_name; document.title = s.app_name + ' · Sign in'; }).catch(() => {});
 $('#f').addEventListener('submit', async (e) => {
