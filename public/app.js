@@ -6,7 +6,7 @@ async function api(path, body, method) {
   let data = null;
   try { data = await res.json(); } catch (e) { /* empty */ }
   if (res.status === 401 && !path.startsWith('/api/login') && !location.pathname.startsWith('/login')) {
-    location.href = '/login'; throw new Error('Please log in');
+    location.href = loginPage(); throw new Error('Please log in');
   }
   if (!res.ok) throw new Error((data && data.error) || `Request failed (${res.status})`);
   return data;
@@ -24,9 +24,14 @@ function toast(msg, kind = 'ok') {
   el.textContent = msg; el.className = 'show ' + kind;
   clearTimeout(toastTimer); toastTimer = setTimeout(() => (el.className = ''), 2800);
 }
+// The sign-in page this screen came from (/login/shop etc.), so signing out goes back to the right one.
+function loginPage() {
+  try { const p = localStorage.getItem('hb_login'); if (p && /^\/login(\/[a-z]+)?$/.test(p)) return p; } catch (e) { /* ok */ }
+  return '/login';
+}
 async function logout() {
   await api('/api/logout', {}).catch(() => {});
-  location.href = '/login';
+  location.href = loginPage();
 }
 // Today's date as 2026-11-14 in this screen's time zone.
 function isoDay(d = new Date()) {
