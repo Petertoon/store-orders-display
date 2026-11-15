@@ -4,13 +4,23 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sign in</title>
 <link rel="stylesheet" href="/style.css">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%8F%A0%3C/text%3E%3C/svg%3E">
+<link rel="icon" id="fav" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%8F%A0%3C/text%3E%3C/svg%3E">
 <meta name="theme-color" content="#0f172a"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+  /* Each screen type gets its own sign-in page: /login/mama, /login/shop, /login/store */
+  .auth { position: relative; overflow: hidden; }
+  .auth .band { margin: -28px -28px 18px; padding: 22px 28px 18px; background: var(--k, #1e2a44); color: #fff; display: flex; align-items: center; gap: 14px; }
+  .auth .band .ic { font-size: 44px; line-height: 1; }
+  .auth .band h1 { margin: 0; font-size: 26px; }
+  .auth .band .sub { opacity: .9; font-size: 15px; margin-top: 2px; }
+  .auth .band [data-brand] { margin-left: auto; }
+  .auth button.primary { background: var(--k, var(--accent)); width: 100%; margin-top: 16px; padding: 14px; font-size: 17px; }
+  .auth input:focus { outline-color: var(--k, var(--accent)); }
+</style>
 </head>
 <body>
 <form class="auth" id="f">
-  <div style="display:flex;align-items:center"><span data-brand></span><h1 id="app" style="margin:0">Sign in</h1></div>
-  <div class="muted">Sign in to your board</div>
+  <div class="band"><span class="ic" id="ic">🏠</span><div><h1 id="app">Sign in</h1><div class="sub" id="sub">Sign in to your board</div></div><span data-brand></span></div>
   <label for="email">Email</label>
   <input id="email" type="email" autocomplete="username" required>
   <label for="pw">Password</label>
@@ -21,11 +31,37 @@
 <script src="/app.js"></script>
 <script src="/brand.js"></script>
 <script>
-api('/api/setup-status').then((s) => { if (s.needs_setup) location.href = '/setup'; $('#app').textContent = s.app_name; document.title = s.app_name + ' · Sign in'; }).catch(() => {});
+const KINDS = {
+  mama: { ic: '🏠', title: "Mama's To-Do", sub: 'Sign in to your to-do list', color: '#db2777' },
+  shop: { ic: '🔧', title: "Papa's Shop", sub: 'Sign in to the shop job board', color: '#d97706' },
+  store: { ic: '🛒', title: 'Store Orders', sub: 'Sign in to your store order screen', color: '#16a34a' },
+};
+const ALIAS = { todo: 'mama', mama: 'mama', papa: 'shop', shop: 'shop', store: 'store' };
+const kindOf = (p) => ALIAS[(p.split('/')[2] || '').toLowerCase()] || '';
+let kind = kindOf(location.pathname);
+// Plain /login on a screen that came from its own sign-in page: go back to that page.
+if (!kind) { const back = loginPage(); if (back !== '/login' && kindOf(back)) location.replace(back); }
+const k = KINDS[kind];
+if (k) {
+  document.documentElement.style.setProperty('--k', k.color);
+  $('#ic').textContent = k.ic; $('#app').textContent = k.title; $('#sub').textContent = k.sub;
+  document.title = k.title + ' · Sign in';
+  document.querySelector('meta[name=theme-color]').content = k.color;
+  $('#fav').href = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">${k.ic}</text></svg>`)}`;
+}
+api('/api/setup-status').then((s) => {
+  if (s.needs_setup) location.href = '/setup';
+  if (!k) { $('#app').textContent = s.app_name; document.title = s.app_name + ' · Sign in'; }
+}).catch(() => {});
 $('#f').addEventListener('submit', async (e) => {
   e.preventDefault(); $('#err').textContent = '';
   try {
     const r = await api('/api/login', { email: $('#email').value, password: $('#pw').value });
+    // Remember this screen's own sign-in page, so "Sign out" comes back to it.
+    try {
+      if (r.admin) localStorage.removeItem('hb_login');
+      else localStorage.setItem('hb_login', '/login/' + (r.screen === 'todo' ? 'mama' : r.screen));
+    } catch (err) { /* ok */ }
     location.href = r.admin ? '/admin' : '/';
   } catch (err) { $('#err').textContent = err.message; }
 });
