@@ -19,6 +19,7 @@
   .bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
   .bar h2 { margin: 0; font-size: 20px; flex: 1; }
   .bar input { width: 240px; }
+  .actions a.btnlink { margin-right: auto; align-self: center; color: var(--accent); font-weight: 600; text-decoration: none; padding: 10px 6px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
   .acct { background: var(--panel); border-radius: 12px; padding: 14px; border-left: 5px solid var(--ok); display: flex; flex-direction: column; gap: 8px; }
   .acct.off { border-left-color: #64748b; opacity: .72; }
@@ -36,6 +37,8 @@
   .sw i::after { content: ''; position: absolute; left: 3px; top: 3px; width: 24px; height: 24px; background: #fff; border-radius: 50%; transition: .15s; }
   .sw input:checked + i { background: var(--ok); }
   .sw input:checked + i::after { left: 27px; }
+  .acct .feat { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; padding: 8px 10px; background: rgba(255,255,255,.05); border-radius: 10px; font-size: 14px; }
+  .acct .feat .sw { transform: scale(.85); }
   .empty { color: var(--muted); padding: 30px 0; text-align: center; }
   .note { background: #1d2a45; border-radius: 10px; padding: 10px 14px; color: #c9d7f5; font-size: 14px; margin-bottom: 14px; }
   .names { display: grid; gap: 6px; }
@@ -84,7 +87,7 @@
 </header>
 <nav class="tabs" id="tabs"></nav>
 <main>
-  <div class="bar"><h2 id="tabTitle"></h2><input id="search" type="search" placeholder="Search accounts…"><button class="primary" id="newBtn">+ New account</button></div>
+  <div class="bar"><h2 id="tabTitle"></h2><input id="search" type="search" placeholder="Search accounts…"><button id="linkBtn" title="The sign-in page to send to people on this screen">🔗 Sign-in link</button><button class="primary" id="newBtn">+ New account</button></div>
   <div id="tabNote"></div>
   <div class="sp" id="storePanel" hidden>
     <div class="alertbox" id="unassigned" hidden></div>
@@ -137,7 +140,8 @@ function render() {
   $('#list').innerHTML = list.map((a) => `<div class="acct ${a.active ? '' : 'off'}" data-id="${a.id}">
       <div class="head"><b title="${esc(a.name)}">${esc(a.name)}</b><span class="badge">${a.active ? 'ON' : 'OFF'}</span>
         <label class="sw" title="Switch this account on or off"><input type="checkbox" data-sw ${a.active ? 'checked' : ''}><i></i></label></div>
-      <div class="meta">✉ ${esc(a.email || 'no sign-in')}<br>${a.screen === 'store' ? storeMeta(a) : `👥 ${a.people} ${a.people === 1 ? 'person' : 'people'} · ${a.open_items} open · last change ${when(a.last_activity)}`}${a.screen === 'shop' ? `<br><span class="pill ${a.qbo === 'reconnect' ? 'bad' : a.qbo ? 'ok' : ''}">QuickBooks: ${a.qbo === 'reconnect' ? 'needs reconnecting' : a.qbo ? esc(a.qbo) : 'not connected'}</span>` : ''}</div>
+      <div class="meta">✉ ${esc(a.email || 'no sign-in')}<br>${a.screen === 'store' ? storeMeta(a) : `👥 ${a.people} ${a.people === 1 ? 'person' : 'people'} · ${a.open_items} open · last change ${when(a.last_activity)}`}</div>${a.screen === 'shop' ? `<div class="feat"><span>📊 QuickBooks${a.qbo_on ? ` <span class="pill ${a.qbo === 'reconnect' ? 'bad' : a.qbo ? 'ok' : ''}">${a.qbo === 'reconnect' ? 'needs reconnecting' : a.qbo ? esc(a.qbo) : 'not connected'}</span>` : ' <span class="pill">off</span>'}</span>
+        <label class="sw" title="Switch QuickBooks on or off for this shop"><input type="checkbox" data-qbo ${a.qbo_on ? 'checked' : ''}><i></i></label></div>` : ''}
       <div class="btns"><button class="primary" data-open>Open screen ▸</button><button data-edit>Edit</button></div></div>`).join('')
     || `<div class="empty">No ${esc(s.label)} accounts${q ? ' match' : ' yet'}. ${q ? '' : 'Tap "+ New account" to make one.'}</div>`;
   history.replaceState(null, '', '#' + tab);
@@ -145,6 +149,14 @@ function render() {
 $('#tabs').onclick = (e) => { const b = e.target.closest('[data-tab]'); if (b) { tab = b.dataset.tab; render(); } };
 $('#search').oninput = render;
 $('#list').addEventListener('change', (e) => {
+  if (e.target.matches('[data-qbo]')) {
+    const id = Number(e.target.closest('[data-id]').dataset.id), on = e.target.checked;
+    const a = data.accounts.find((x) => x.id === id);
+    return run(async () => {
+      await api('/api/admin/accounts/' + id, { qbo_on: on }, 'PUT');
+      toast(`QuickBooks ${on ? 'on' : 'off'} for ${a.name}`); await load();
+    }).then((r) => { if (r === null) load(); });
+  }
   if (!e.target.matches('[data-sw]')) return;
   const id = Number(e.target.closest('[data-id]').dataset.id), on = e.target.checked;
   const a = data.accounts.find((x) => x.id === id);
@@ -272,6 +284,21 @@ function newDialog() {
   });
 }
 $('#newBtn').onclick = newDialog;
+// Each screen type has its own sign-in page to hand out.
+const LOGIN_SLUG = { todo: 'mama', shop: 'shop', store: 'store' };
+const loginLink = (k) => location.origin + '/login/' + LOGIN_SLUG[k];
+$('#linkBtn').onclick = () => {
+  const s = data.screens[tab], url = loginLink(tab);
+  const f = openModal(`<h2>${s.icon} ${esc(s.label)} sign-in link</h2>
+    <p class="muted">Send this link to people using a ${esc(s.label)} screen. It opens a sign-in page with the ${esc(s.label)} name and colors. They sign in with the email and password of their account.</p>
+    <input id="lnk" readonly value="${esc(url)}">
+    <div class="actions"><a class="btnlink" href="${esc(url)}" target="_blank" rel="noopener">Open</a><button type="button" onclick="closeModal()">Done</button><button type="button" class="primary" id="lnkCopy">Copy link</button></div>`);
+  $('#lnk').addEventListener('focus', (e) => e.target.select());
+  $('#lnkCopy').onclick = async () => {
+    try { await navigator.clipboard.writeText(url); } catch (e) { $('#lnk').select(); document.execCommand('copy'); }
+    toast('Link copied');
+  };
+};
 function editDialog(a) {
   const f = openModal(`<h2>Edit ${esc(a.name)}</h2>
     <label>Account name</label><input name="name" maxlength="80" value="${esc(a.name)}" required>
