@@ -307,6 +307,7 @@ const stores = require('./stores')(app, { pool, wrap, fail, text, cleanColor, re
 // ---------- Papa's Shop: parts, charges, up-charges, payments, invoices, phone scanner ----------
 board.hooks.paymentRemoved = [];
 const shop = require('./shop')(app, { pool, wrap, fail, text, requireLogin, notify: board.notify, hooks: board.hooks });
+require('./shopping')(app, { pool, wrap, fail, text, requireLogin, notify: board.notify });
 const qbo = require('./qbo')(app, { pool, wrap, fail, text, requireLogin, notify: board.notify, hooks: board.hooks, shop });
 
 // ---------- the Lokaalapp logo circle (top left of every screen), set on the admin page ----------
