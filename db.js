@@ -287,6 +287,12 @@ CREATE TABLE IF NOT EXISTS qbo_removals (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Calendar column: a column of dated to-dos/events; on its day each one moves to the chosen column (normally Today).
+ALTER TABLE board_columns ADD COLUMN IF NOT EXISTS kind TEXT;
+ALTER TABLE board_columns ADD COLUMN IF NOT EXISTS cal_target INT;
+ALTER TABLE todos ADD COLUMN IF NOT EXISTS due_time TEXT;
+ALTER TABLE households ADD COLUMN IF NOT EXISTS cal_seeded BOOLEAN NOT NULL DEFAULT FALSE;
+
 -- Shopping lists on Mama's To-Do: up to 5 named pages, each a checklist of items.
 CREATE TABLE IF NOT EXISTS shop_pages (
   id SERIAL PRIMARY KEY,
