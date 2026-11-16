@@ -287,6 +287,26 @@ CREATE TABLE IF NOT EXISTS qbo_removals (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Shopping lists on Mama's To-Do: up to 5 named pages, each a checklist of items.
+CREATE TABLE IF NOT EXISTS shop_pages (
+  id SERIAL PRIMARY KEY,
+  household_id INT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  position INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS shop_pages_house ON shop_pages(household_id);
+CREATE TABLE IF NOT EXISTS shop_items (
+  id SERIAL PRIMARY KEY,
+  page_id INT NOT NULL REFERENCES shop_pages(id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
+  done BOOLEAN NOT NULL DEFAULT FALSE,
+  done_at TIMESTAMPTZ,
+  member_id INT REFERENCES members(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS shop_items_page ON shop_items(page_id);
+
 ALTER TABLE todos DROP CONSTRAINT IF EXISTS todos_priority_check;
 ALTER TABLE todos ADD CONSTRAINT todos_priority_check CHECK (priority IN ('normal', 'high'));
 `;
