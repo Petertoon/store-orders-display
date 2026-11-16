@@ -111,6 +111,8 @@ CREATE INDEX IF NOT EXISTS todo_history_todo ON todo_history (todo_id);
 -- 'todo' (Mama's To-Do), 'shop' (Papa's Shop job board) or 'store' (Store Orders), and can be switched off.
 ALTER TABLE households ADD COLUMN IF NOT EXISTS screen TEXT NOT NULL DEFAULT 'todo';
 ALTER TABLE households ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+-- QuickBooks is an add-on the admin switches on per Papa's Shop account (off = no QuickBooks button, nothing is sent).
+ALTER TABLE households ADD COLUMN IF NOT EXISTS qbo_on BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE households DROP CONSTRAINT IF EXISTS households_screen_check;
 ALTER TABLE households ADD CONSTRAINT households_screen_check CHECK (screen IN ('todo', 'shop', 'store'));
 -- The admin (platform owner) has a login with no account of its own and can open any account's screen.
