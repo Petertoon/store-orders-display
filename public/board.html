@@ -173,7 +173,11 @@
   .collist i { width: 14px; height: 14px; border-radius: 4px; background: var(--c); display: inline-block; flex: none; }
   .collist button { padding: 6px 10px; }
   .addrow { display: flex; gap: 6px; }
-  .mrow { display: grid; grid-template-columns: 52px 1fr auto auto; gap: 6px; align-items: center; margin-top: 6px; }
+  .mrow { display: grid; grid-template-columns: 40px 1fr auto auto; gap: 6px; align-items: center; margin-top: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+  .mrow .dot.mbig { width: 30px; height: 30px; justify-self: center; }
+  .mcolors { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 7px; }
+  .mcolors .sw { width: 30px; height: 30px; padding: 0; border-radius: 50%; background: var(--mc); border: 3px solid transparent; }
+  .mcolors .sw.on { border-color: #fff; box-shadow: 0 0 0 2px var(--mc); }
   .mrow button { padding: 8px 10px; }
   hr { border: 0; border-top: 1px solid var(--line); margin: 18px 0 6px; }
 
@@ -871,10 +875,13 @@ $('#setupBtn').onclick = boardSetup;
 
 // ---------- family & house ----------
 const COLORS = ['#3b82f6', '#ec4899', '#22c55e', '#f59e0b', '#a855f7', '#14b8a6', '#ef4444', '#64748b'];
+// Colors to tap for a person (works the same on every phone, tablet and touchscreen; no color picker needed).
+const PICK = ['#3b82f6', '#0ea5e9', '#14b8a6', '#22c55e', '#eab308', '#f59e0b', '#f97316', '#ef4444', '#ec4899', '#a855f7', '#92400e', '#64748b'];
 function familyDialog() {
   const f = openModal(`<h2>${W.pIcon} ${W.people}</h2><div class="muted" style="font-size:14px">Everyone shares the ${W.place} sign-in and picks their name on each screen.</div>
-    <div id="mlist">${members.map((m) => `<div class="mrow" data-mid="${m.id}"><input type="color" value="${m.color}"><input type="text" maxlength="40" value="${esc(m.name)}">
-      <button type="button" class="primary" data-save>Save</button><button type="button" data-del title="Remove">🗑</button></div>`).join('')}</div>
+    <div id="mlist">${members.map((m) => `<div class="mrow" data-mid="${m.id}"><i class="dot mbig" style="--mc:${esc(m.color)}"></i><input type="text" maxlength="40" value="${esc(m.name)}">
+      <button type="button" class="primary" data-save>Save</button><button type="button" data-del title="Remove">🗑</button>
+      <div class="mcolors">${PICK.map((c) => `<button type="button" class="sw ${c === m.color.toLowerCase() ? 'on' : ''}" data-color="${c}" style="--mc:${c}" title="Use this color"></button>`).join('')}</div></div>`).join('')}</div>
     <div class="addrow" style="margin-top:10px"><input id="newMem" type="text" maxlength="40" placeholder="Add a person"><button type="button" class="primary" id="addMem">+ Add</button></div>
     <hr><label>Name of this ${W.place}</label><div class="addrow"><input id="houseName" type="text" maxlength="80" value="${esc(me.household.name)}"><button type="button" id="saveHouse">Save</button></div>
     ${me.admin ? '<div class="muted" style="font-size:13px;margin-top:10px">You are viewing this account as admin. Its sign-in and password are changed on the admin page.</div>' : `<label>Change the ${W.place} password</label>
@@ -885,8 +892,15 @@ function familyDialog() {
   f.onclick = async (e) => {
     const t = e.target.closest('button'); if (!t) return;
     const row = t.closest('[data-mid]');
+    if (row && t.dataset.color) return run(async () => { // tap a color: saved right away
+      const m = memberById(Number(row.dataset.mid));
+      row.querySelectorAll('.sw').forEach((b) => b.classList.toggle('on', b === t));
+      row.querySelector('.mbig').style.setProperty('--mc', t.dataset.color);
+      await api('/api/members/' + m.id, { name: m.name, color: t.dataset.color }, 'PUT');
+      await reloadMe(); toast(`${m.name}'s color changed`); familyDialog();
+    });
     if (row && 'save' in t.dataset) return run(async () => {
-      await api('/api/members/' + row.dataset.mid, { name: row.querySelector('input[type=text]').value, color: row.querySelector('input[type=color]').value }, 'PUT');
+      await api('/api/members/' + row.dataset.mid, { name: row.querySelector('input[type=text]').value, color: memberById(Number(row.dataset.mid)).color }, 'PUT');
       await reloadMe(); toast('Saved'); familyDialog();
     });
     if (row && 'del' in t.dataset) {
