@@ -156,6 +156,7 @@
 
   /* dialogs */
   .modal-back { bottom: var(--oskh, 0px); }
+  .modal-back .modal { max-height: 100%; } /* fit above the on-screen keyboard, and scroll inside */
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .presets { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
   .presets button { padding: 5px 10px; font-size: 13px; }
@@ -259,6 +260,14 @@
     .sllist { max-height: none; }
     .slitem { font-size: 19px; padding: 12px 2px; } .slitem .by { display: none; }
   }
+  /* ✕ close button on every dialog; stays in view while the dialog scrolls */
+  /* a thin bar with ✕ that stays at the top while the dialog scrolls (covers what scrolls under it) */
+  .modal .mtop { position: sticky; top: -22px; z-index: 3; margin: -22px -22px -30px; padding: 8px 8px 0; height: 52px; display: flex; justify-content: flex-end; pointer-events: none; }
+  .modal .mtop::before { content: ''; position: absolute; inset: 0; background: var(--panel); border-radius: 14px 14px 0 0; opacity: 0; transition: opacity .15s; }
+  .modal.scrolled .mtop::before { opacity: 1; }
+  .modal .mclose { position: relative; pointer-events: auto; width: 42px; height: 42px; padding: 0; border-radius: 50%; font-size: 20px; background: #26334d; color: var(--ink); }
+  .modal .mtop + h2, .modal .mtop + * h2:first-child { padding-right: 46px; }
+  .modal.slmodal .mtop { display: none; } /* shopping lists have their own Done at the top */
 </style>
 </head>
 <body>
@@ -339,12 +348,14 @@ async function run(fn) { try { return await fn(); } catch (e) { toast(e.message,
 // ---------- dialogs ----------
 function openModal(html) {
   const mb = $('#mBody'); mb.onclick = mb.oninput = mb.onchange = null; mb.className = 'modal';
-  mb.innerHTML = html;
+  // ✕ in the top corner of every dialog, so there's always a way out (even with a keyboard covering the bottom).
+  mb.innerHTML = '<div class="mtop"><button type="button" class="mclose" title="Close" aria-label="Close" onclick="closeModal()">✕</button></div>' + html;
   $('#m').classList.add('open');
   return mb;
 }
 function closeModal() { $('#m').classList.remove('open'); $('#mBody').innerHTML = ''; }
 $('#m').addEventListener('mousedown', (e) => { if (e.target.id === 'm') closeModal(); });
+$('#mBody').addEventListener('scroll', (e) => e.target.classList.toggle('scrolled', e.target.scrollTop > 4));
 // A yes/no question in our own dialog (bigger than the browser's, and works with the on-screen keyboard).
 function ask(question, yes = 'Yes', danger = false) {
   return new Promise((resolve) => {
