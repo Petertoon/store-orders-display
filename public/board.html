@@ -216,6 +216,45 @@
     #osk .key { height: 46px; font-size: 18px; } #osk .krow { gap: 4px; margin-top: 5px; }
     .btnset .row2 { grid-template-columns: 1fr; } .whobox .people button { min-width: 42vw; padding: 18px 12px; font-size: 19px; }
   }
+  /* 🛒 shopping lists (Mama's To-Do) */
+  .dk.shopbtn { background: #db2777; color: #fff; }
+  .modal.slmodal { max-width: 660px; }
+  .slhead { display: flex; align-items: center; gap: 8px; }
+  .slhead h2 { flex: 1; margin: 0; }
+  .slhead [data-keys].on { background: var(--accent); color: #fff; }
+  .sltabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 14px 0 10px; }
+  .sltab { border-radius: 999px; padding: 9px 15px; font-size: 15px; }
+  .sltab.on { background: #db2777; color: #fff; }
+  .sltab .n { margin-left: 6px; font-size: 13px; opacity: .8; }
+  .sltab.addp { background: transparent; border: 1px dashed #475569; color: var(--muted); }
+  .slbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; min-height: 40px; }
+  .slbar input { flex: 1; }
+  .slbar button.link { background: transparent; color: var(--muted); padding: 6px 8px; font-weight: 500; }
+  .sladd { display: flex; gap: 8px; margin-bottom: 8px; }
+  .sladd .fld { flex: 1; display: flex; gap: 6px; }
+  .sladd input { flex: 1; font-size: 17px; border: 2px solid #db2777; }
+  .sladd .primary { background: #db2777; }
+  .sllist { max-height: 52vh; overflow: auto; }
+  .slitem { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--line); font-size: 18px; }
+  .slitem .t { flex: 1; word-break: break-word; }
+  .slcb { width: 30px; height: 30px; flex: none; padding: 0; border-radius: 8px; border: 2px solid #64748b; background: transparent; color: #fff; font-weight: 800; font-size: 17px; }
+  .slitem.done .slcb { background: var(--ok); border-color: var(--ok); }
+  .slitem.done .t { text-decoration: line-through; color: #64748b; }
+  .slitem .by { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+  .slitem .by::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--mc); }
+  .slitem .x { background: transparent; color: #64748b; padding: 6px 8px; }
+  .slitem .x:hover { color: var(--danger); }
+  .slsec { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .05em; margin: 14px 0 2px; }
+  .slempty { padding: 14px 4px; }
+  .slfoot { margin-top: 12px; }
+  .slbar button.link { white-space: nowrap; }
+  @media (max-width: 600px) {
+    .modal.slmodal { padding: 14px; max-height: none; height: 100%; border-radius: 12px; }
+    .slhead h2 { font-size: 20px; } .slhead [data-keys] { display: none; }
+    .slbar { flex-wrap: wrap; font-size: 15px; } .slbar button.link { padding: 6px 4px; font-size: 14px; }
+    .sllist { max-height: none; }
+    .slitem { font-size: 19px; padding: 12px 2px; } .slitem .by { display: none; }
+  }
 </style>
 </head>
 <body>
@@ -226,6 +265,7 @@
   <select id="whoSel" aria-label="Whose to-dos"></select>
   <label class="check"><input type="checkbox" id="allDone"> Older done</label>
   <div class="spacer"></div>
+  <button class="dk shopbtn" id="shopListBtn" hidden>🛒<span class="hide-sm"> Shopping</span></button>
   <button class="dk" data-keys title="On-screen keyboard (for touchscreens)">⌨<span class="hide-sm"> Keyboard</span></button>
   <button class="dk" id="setupBtn">⚙<span class="hide-sm"> Board setup</span></button>
   <button class="dk" id="partsBtn" hidden>🔩<span class="hide-sm"> Parts</span></button>
@@ -273,6 +313,7 @@
 <script src="/app.js"></script>
 <script src="/keys.js"></script>
 <script src="/shop-ui.js"></script>
+<script src="/shopping-ui.js"></script>
 <script src="/brand.js"></script>
 <script>
 const SCREEN = Math.random().toString(36).slice(2, 10); // tells this screen's own saves apart from other screens'
@@ -293,7 +334,7 @@ async function run(fn) { try { return await fn(); } catch (e) { toast(e.message,
 
 // ---------- dialogs ----------
 function openModal(html) {
-  const mb = $('#mBody'); mb.onclick = mb.oninput = mb.onchange = null;
+  const mb = $('#mBody'); mb.onclick = mb.oninput = mb.onchange = null; mb.className = 'modal';
   mb.innerHTML = html;
   $('#m').classList.add('open');
   return mb;
@@ -867,6 +908,7 @@ function familyDialog() {
   $('#newMem').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#addMem').click(); } });
 }
 $('#familyBtn').onclick = familyDialog;
+$('#shopListBtn').onclick = () => Shopping.open();
 async function reloadMe() {
   me = await api('/api/me'); members = me.members;
   applyAccount();
@@ -883,6 +925,7 @@ function applyAccount() {
   $('#tTitle').placeholder = W.title;
   $('#pIcon').textContent = W.pIcon; $('#pLabel').textContent = ' ' + W.people;
   $('#custBox').hidden = !isShop;
+  $('#shopListBtn').hidden = me.account.screen !== 'todo';
   if (isShop && !Shop.started) { Shop.started = true; Shop.init().catch(() => {}); }
   $('#adminBar').hidden = !me.admin;
   if (me.admin) {
@@ -914,6 +957,7 @@ function listen() {
     clearTimeout(reloadTimer);
     reloadTimer = setTimeout(async () => {
       if (m.type === 'members') { await run(reloadMe); if (cur) renderTicket(); return; }
+      if (m.type === 'shopping') { Shopping.changed(); return; }
       if (m.type === 'parts') { if (isShop) Shop.loadParts().catch(() => {}); return; }
       if (m.type === 'customers') { if (isShop) Shop.loadCustomers().catch(() => {}); return; }
       if (m.type === 'qbo') { if (isShop) Shop.qboChanged(); return; }
