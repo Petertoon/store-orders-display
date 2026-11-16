@@ -268,6 +268,23 @@
   .modal .mclose { position: relative; pointer-events: auto; width: 42px; height: 42px; padding: 0; border-radius: 50%; font-size: 20px; background: #26334d; color: var(--ink); }
   .modal .mtop + h2, .modal .mtop + * h2:first-child { padding-right: 46px; }
   .modal.slmodal .mtop { display: none; } /* shopping lists have their own Done at the top */
+  /* 📅 calendar column */
+  .mcal { background: rgba(255,255,255,.04); border-radius: 10px; padding: 8px; }
+  .mcal .mh { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .mcal .mh b { font-size: 14px; }
+  .mcal .mh button { background: transparent; color: inherit; padding: 2px 10px; font-size: 18px; }
+  .mcal .wk, .mcal .dd { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+  .mcal .wk i { font-style: normal; font-size: 11px; opacity: .6; }
+  .mcal .dd button { position: relative; background: transparent; color: inherit; padding: 6px 0; font-size: 13px; border-radius: 6px; font-weight: 500; }
+  .mcal .dd button:hover { background: rgba(255,255,255,.1); }
+  .mcal .dd button.past { opacity: .35; cursor: default; }
+  .mcal .dd button.td { background: var(--c); color: var(--ht, #fff); font-weight: 800; }
+  .mcal .dd button.has::after { content: ''; position: absolute; left: 50%; bottom: 2px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: #f59e0b; }
+  .mcal small { display: block; font-size: 11.5px; opacity: .65; margin-top: 4px; text-align: center; }
+  .calday { font-size: 12.5px; text-transform: uppercase; letter-spacing: .04em; opacity: .75; margin: 6px 2px -2px; }
+  .calday b { color: #f59e0b; }
+  .calnote { background: rgba(14,116,144,.18); border: 1px solid rgba(14,116,144,.5); border-radius: 8px; padding: 8px 10px; font-size: 13.5px; margin: 4px 0 8px; }
+  .dtrow { display: flex; gap: 6px; } .dtrow input[type=date] { flex: 1.4; } .dtrow input[type=time] { flex: 1; } .dtrow button { padding: 6px 10px; }
 </style>
 </head>
 <body>
@@ -343,6 +360,38 @@ const firstLine = (s) => String(s || '').split('\n').map((x) => x.trim()).find(B
 const shortDate = (d) => (d ? new Date(d.length === 10 ? d + 'T12:00:00' : d).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '');
 const when = (d) => new Date(d).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 const addDays = (n, from = new Date()) => { const d = new Date(from); d.setDate(d.getDate() + n); return isoDay(d); };
+// ---------- calendar column ----------
+const isCal = (c) => !!c && c.kind === 'calendar';
+const firstCol = () => cols.find((c) => !isCal(c)) || cols[0];
+const calTarget = (c) => cols.find((x) => x.id === c.cal_target && !isCal(x)) || cols.find((x) => !isCal(x) && /today/i.test(x.name)) || firstCol();
+const niceTime = (t) => { if (!t) return ''; const h = Number(t.slice(0, 2)); return `${h % 12 || 12}:${t.slice(3, 5)} ${h < 12 ? 'AM' : 'PM'}`; };
+const longDate = (d) => new Date(d + 'T12:00:00').toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+const dayWord = (d) => (d === isoDay() ? 'Today' : d === addDays(1) ? 'Tomorrow' : '');
+let calMonth = isoDay().slice(0, 7); // the month shown in the calendar column (YYYY-MM)
+function miniCal(c, list) {
+  const [y, mo] = calMonth.split('-').map(Number), first = new Date(y, mo - 1, 1), days = new Date(y, mo, 0).getDate();
+  const today = isoDay(), has = new Set(list.map((t) => t.due_date).filter(Boolean));
+  const cells = [];
+  for (let k = 0; k < first.getDay(); k++) cells.push('<i></i>');
+  for (let d = 1; d <= days; d++) {
+    const iso = `${calMonth}-${String(d).padStart(2, '0')}`;
+    cells.push(`<button type="button" data-calday="${iso}" data-calcol="${c.id}" class="${iso === today ? 'td' : ''} ${iso < today ? 'past' : ''} ${has.has(iso) ? 'has' : ''}" title="${iso < today ? '' : 'Add something on ' + longDate(iso)}">${d}</button>`);
+  }
+  const name = first.toLocaleDateString([], { month: 'long', year: 'numeric' });
+  return `<div class="mcal"><div class="mh"><button type="button" data-calmo="-1" title="Previous month">‹</button><b>${name}</b><button type="button" data-calmo="1" title="Next month">›</button></div>
+    <div class="wk">${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((x) => `<i>${x}</i>`).join('')}</div><div class="dd">${cells.join('')}</div>
+    <small>Tap a day to add something. On its day it moves to ${esc(calTarget(c).name)}.</small></div>`;
+}
+function calCards(c, list, i) {
+  const sorted = list.slice().sort((a, b) => (a.due_date || '').localeCompare(b.due_date || '') || (a.due_time || '99').localeCompare(b.due_time || '99'));
+  let last = null, out = '';
+  for (const t of sorted) {
+    const key = t.due_date || '';
+    if (key !== last) { last = key; out += `<div class="calday">${key ? `${dayWord(key) ? `<b>${dayWord(key)}</b> · ` : ''}${esc(longDate(key))}` : 'No date yet'}</div>`; }
+    out += card(t, c, i);
+  }
+  return out;
+}
 async function run(fn) { try { return await fn(); } catch (e) { toast(e.message, 'bad'); return null; } }
 
 // ---------- dialogs ----------
@@ -436,7 +485,8 @@ function card(t, c, i) {
   if (isShop && t.customer_name && t.customer_name !== title) meta.push(`<span>👤 ${esc(t.customer_name)}</span>`);
   if (m) meta.push(`<span class="who"><i class="dot" style="--mc:${m.color}"></i>${esc(m.name)}</span>`);
   if (t.priority === 'high') meta.push('<span class="flag">⚑ High</span>');
-  const due = dueHtml(t.due_date, last); if (due) meta.push(due);
+  if (isCal(c)) meta.push(t.due_date ? (t.due_time ? `<span>🕑 ${niceTime(t.due_time)}</span>` : '') : '<span class="late">📅 Pick a date</span>');
+  else { const due = dueHtml(t.due_date, last); if (due) meta.push(due + (t.due_time ? `<span>🕑 ${niceTime(t.due_time)}</span>` : '')); }
   if (t.steps) meta.push(`<span>☑ ${t.steps_done}/${t.steps}</span>`);
   if (isShop) { const mm = Shop.cardMeta(t); if (mm) meta.push(mm); }
   if (last && t.done_at) meta.push(`<span class="ok">✓ Done ${shortDate(t.done_at)}</span>`);
@@ -471,11 +521,19 @@ function renderBoard() {
     return `<section class="col" data-col="${c.id}" style="${colVars(c)}">
       <div class="colhead"><div><b>${esc(c.name.toUpperCase())}</b><small>${plural(list.length)}</small></div>
         <button data-add="${c.id}" title="New ${W.one} in ${esc(c.name)}">+</button><button data-gear="${c.id}" title="Column settings">⚙</button></div>
-      <div class="cards">${list.map((t) => card(t, c, i)).join('') || `<div class="empty">${last ? 'Nothing done yet' : 'Nothing here'}</div>`}</div></section>`;
+      <div class="cards">${isCal(c) ? miniCal(c, list) + (calCards(c, list, i) || '<div class="empty">Nothing coming up</div>')
+        : list.map((t) => card(t, c, i)).join('') || `<div class="empty">${last ? 'Nothing done yet' : 'Nothing here'}</div>`}</div></section>`;
   }).join('');
 }
 $('#board').addEventListener('click', (e) => {
   const g = e.target.closest('[data-gear]'); if (g) return columnSettings(Number(g.dataset.gear));
+  const mo = e.target.closest('[data-calmo]');
+  if (mo) { const [y, m] = calMonth.split('-').map(Number), d = new Date(y, m - 1 + Number(mo.dataset.calmo), 1); calMonth = isoDay(d).slice(0, 7); return renderBoard(); }
+  const cd = e.target.closest('[data-calday]');
+  if (cd) {
+    if (cd.dataset.calday < isoDay()) return toast('That day has already passed', 'bad');
+    return newTicket(Number(cd.dataset.calcol), { due_date: cd.dataset.calday });
+  }
   const a = e.target.closest('[data-add]'); if (a) return newTicket(Number(a.dataset.add));
   const nx = e.target.closest('[data-next]');
   if (nx) { e.stopPropagation(); return run(async () => { await api(`/api/todos/${nx.dataset.next}/move`, { direction: 1 }); await loadBoard(); }); }
@@ -512,7 +570,7 @@ $('#board').addEventListener('drop', (e) => {
 $('#search').addEventListener('input', renderBoard);
 $('#whoSel').addEventListener('change', renderBoard);
 $('#allDone').addEventListener('change', () => run(loadBoard));
-$('#newTodo').onclick = () => newTicket(cols[0] && cols[0].id);
+$('#newTodo').onclick = () => newTicket(firstCol() && firstCol().id);
 
 // ---------- the to-do ticket: everything is typed (or spoken) right here and saves as you go ----------
 let pending = {}, saveTimer = null, saveChain = Promise.resolve();
@@ -523,10 +581,13 @@ function setState(st) {
   el.textContent = { typing: '…', saving: 'Saving…', saved: 'Saved ✓', error: 'Not saved ⚠', '': '' }[st] ?? st;
 }
 // A blank ticket. It is only created on the server once something is typed into it.
-function newTicket(columnId) {
+function newTicket(columnId, preset = {}) {
   const v = $('#whoSel').value;
   const forWho = v === 'mine' && me.member ? me.member.id : (/^\d+$/.test(v) ? Number(v) : null);
-  cur = { id: null, column_id: columnId || cols[0].id, title: '', notes: '', member_id: forWho, due_date: null, priority: 'normal',
+  const col = cols.find((c) => c.id === columnId) || firstCol();
+  // Something new in the calendar gets a date (tomorrow, unless a day was tapped).
+  const due = preset.due_date || (isCal(col) ? addDays(1) : null);
+  cur = { id: null, column_id: col.id, title: '', notes: '', member_id: forWho, due_date: due, due_time: null, priority: 'normal',
     customer_name: '', customer_phone: '', job_address: '',
     status_label: null, steps: [], history: [] };
   openId = null;
@@ -578,7 +639,7 @@ async function refreshTicket() {
   renderTicket();
   if (isShop) await Shop.loadMoney().catch(() => {});
 }
-function colOf(t) { return cols.find((c) => c.id === t.column_id) || t.column || cols[0]; }
+function colOf(t) { return cols.find((c) => c.id === t.column_id) || t.column || firstCol(); }
 function renderTicket() {
   const t = cur, c = colOf(t);
   const i = cols.findIndex((x) => x.id === c.id);
@@ -607,14 +668,16 @@ function renderSide() {
     <label>For</label>
     <div class="pick" id="pickWho"><button type="button" data-who="" class="${t.member_id ? '' : 'on'}">👥 Anyone</button>${members.map((m) =>
       `<button type="button" data-who="${m.id}" class="${t.member_id === m.id ? 'on' : ''}" style="--mc:${m.color}"><i class="dot" style="--mc:${m.color}"></i>${esc(m.name)}</button>`).join('')}</div>
-    <label>Due ${t.due_date ? `· <span style="font-weight:700">${dueHtml(t.due_date, false).replace(/<[^>]+>/g, '') || shortDate(t.due_date)}</span>` : ''}</label>
+    ${isCal(colOf(t)) ? `<label>Date ${t.due_date ? `· <span style="font-weight:700">${esc(longDate(t.due_date))}${t.due_time ? ' · ' + niceTime(t.due_time) : ''}</span>` : ''}</label>
+      <div class="calnote">📅 ${t.due_date ? `On ${esc(longDate(t.due_date))} this moves to <b>${esc(calTarget(colOf(t)).name)}</b> by itself.` : 'Pick a date. On that day it moves to <b>' + esc(calTarget(colOf(t)).name) + '</b> by itself.'}</div>`
+    : `<label>Due ${t.due_date ? `· <span style="font-weight:700">${dueHtml(t.due_date, false).replace(/<[^>]+>/g, '') || shortDate(t.due_date)}</span>` : ''}</label>`}
     <div class="pick" id="pickDue">
       <button type="button" data-due="${today}" class="${t.due_date === today ? 'on' : ''}">Today</button>
       <button type="button" data-due="${addDays(1)}" class="${t.due_date === addDays(1) ? 'on' : ''}">Tomorrow</button>
       <button type="button" data-due="${sat}" class="${t.due_date === sat ? 'on' : ''}">This weekend</button>
       <button type="button" data-due="${addDays(7)}" class="${t.due_date === addDays(7) ? 'on' : ''}">Next week</button>
       ${t.due_date ? '<button type="button" data-due="">✕ No date</button>' : ''}</div>
-    <input type="date" id="dueDate" value="${t.due_date || ''}" aria-label="Pick a due date">
+    <div class="dtrow"><input type="date" id="dueDate" value="${t.due_date || ''}" aria-label="Pick a date"><input type="time" id="dueTime" value="${t.due_time || ''}" aria-label="Time (optional)" title="Time (optional)">${t.due_time ? '<button type="button" data-notime title="No time">✕</button>' : ''}</div>
     <label>Priority</label>
     <div class="pick" id="pickPri"><button type="button" data-pri="normal" class="${t.priority !== 'high' ? 'on' : ''}">Normal</button>
       <button type="button" data-pri="high" class="${t.priority === 'high' ? 'on' : ''}" style="--mc:#ef4444">⚑ High</button></div>
@@ -649,7 +712,7 @@ async function save(t, body) {
   if (cur === t) setState('saved');
 }
 const hasContent = (t) => [t.title, t.notes, t.customer_name].some((x) => (x || '').trim());
-const newBody = (t) => ({ title: t.title, notes: t.notes, member_id: t.member_id, due_date: t.due_date, priority: t.priority, column_id: t.column_id,
+const newBody = (t) => ({ title: t.title, notes: t.notes, member_id: t.member_id, due_date: t.due_date, due_time: t.due_time || null, priority: t.priority, column_id: t.column_id,
   customer_id: t.customer_id || null,
   customer_name: t.customer_name || '', customer_phone: t.customer_phone || '', job_address: t.job_address || '' });
 // Makes sure the to-do / job exists on the server (for buttons, moving, steps).
@@ -686,9 +749,13 @@ async function setField(key, value) {
 $('#tSide').addEventListener('click', (e) => {
   const w = e.target.closest('[data-who]'); if (w) return setField('member_id', w.dataset.who ? Number(w.dataset.who) : null);
   const d = e.target.closest('[data-due]'); if (d) return setField('due_date', d.dataset.due || null);
+  if (e.target.closest('[data-notime]')) return setField('due_time', null);
   const p = e.target.closest('[data-pri]'); if (p) return setField('priority', p.dataset.pri);
 });
-$('#tSide').addEventListener('change', (e) => { if (e.target.id === 'dueDate') setField('due_date', e.target.value || null); });
+$('#tSide').addEventListener('change', (e) => {
+  if (e.target.id === 'dueDate') setField('due_date', e.target.value || null);
+  if (e.target.id === 'dueTime') setField('due_time', e.target.value || null);
+});
 $('#tHead').addEventListener('click', (e) => {
   const t = e.target.closest('button'); if (!t) return;
   if (t.id === 'tBack') return closeTicket();
@@ -800,8 +867,24 @@ const THEMES = [
   { name: 'Red', color: '#dc2626', bg_color: '#fee2e2', card_color: '#ffffff', card_text_color: '#7f1d1d' },
   { name: 'Purple', color: '#7e22ce', bg_color: '#f3e8ff', card_color: '#ffffff', card_text_color: '#3b0764' },
 ];
+// The calendar column's settings: its name, color and where things go on their day.
+function calSettings(c) {
+  const f = openModal(`<h2>📅 Calendar column</h2>
+    <p class="muted" style="margin:0 0 8px;font-size:14px">Put anything with a date here: appointments, birthdays, trash day. On its day it moves by itself to the column you pick below.</p>
+    <label>Column name</label><input name="name" required maxlength="40" value="${esc(c.name)}">
+    <label>Header color</label><input name="color" type="color" value="${c.color}">
+    <label>On its day, move it to</label>
+    <select name="target">${cols.filter((x) => !isCal(x)).map((x) => `<option value="${x.id}" ${x.id === calTarget(c).id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
+    <div class="actions"><button type="button" onclick="closeModal()">Cancel</button><button class="primary" id="saveCal">Save</button></div>`);
+  $('#saveCal').onclick = () => run(async () => {
+    if (!f.reportValidity()) return;
+    await api('/api/columns/' + c.id, { name: f.name.value, color: f.color.value, buttons: [], cal_target: Number(f.target.value) }, 'PUT');
+    closeModal(); toast('Calendar saved'); await loadBoard();
+  });
+}
 function columnSettings(id) {
   const c = cols.find((x) => x.id === id); if (!c) return;
+  if (isCal(c)) return calSettings(c);
   const b = [0, 1, 2].map((k) => (c.buttons || [])[k] || { label: '', enabled: false, action: 'mark', color: '#3b82f6' });
   const f = openModal(`<h2>Customize column</h2>
     <label>Column name</label><input name="name" required maxlength="40" value="${esc(c.name)}">
@@ -854,14 +937,15 @@ function columnSettings(id) {
 }
 function boardSetup() {
   openModal(`<h2>Board setup</h2><p class="muted" style="margin:0 0 8px">Columns run left to right. ${W.One}s can go to any column. The last column is "done": ${W.many} there show when they were finished and drop off the board after 14 days.</p>
-    <div class="collist">${cols.map((c, i) => `<div><i style="--c:${c.color}"></i><b>${i + 1}. ${esc(c.name)}${i === cols.length - 1 ? ' <span class="muted" style="font-weight:500">(done)</span>' : ''}
-      <small class="muted" style="display:block;font-weight:500;font-size:12.5px">${(c.buttons || []).filter((x) => x.enabled).map((x) => esc(x.label) + (x.place === 'top' ? ' ⬆' : x.place === 'bottom' ? ' ⬇' : '')).join(' · ') || 'No buttons'}</small></b>
+    <div class="collist">${cols.map((c, i) => `<div><i style="--c:${c.color}"></i><b>${i + 1}. ${isCal(c) ? '📅 ' : ''}${esc(c.name)}${i === cols.length - 1 ? ' <span class="muted" style="font-weight:500">(done)</span>' : ''}
+      <small class="muted" style="display:block;font-weight:500;font-size:12.5px">${isCal(c) ? `Calendar · on their day, things move to ${esc(calTarget(c).name)}` : (c.buttons || []).filter((x) => x.enabled).map((x) => esc(x.label) + (x.place === 'top' ? ' ⬆' : x.place === 'bottom' ? ' ⬇' : '')).join(' · ') || 'No buttons'}</small></b>
       ${i > 0 ? `<button type="button" data-up="${c.id}" title="Move left">←</button>` : ''}
       ${i < cols.length - 1 ? `<button type="button" data-down="${c.id}" title="Move right">→</button>` : ''}
       <button type="button" data-edit="${c.id}" title="Colors and buttons">⚙</button>
       ${cols.length > 2 ? `<button type="button" data-rm="${c.id}" title="Remove">🗑</button>` : ''}</div>`).join('')}</div>
     <div class="addrow" style="margin-top:12px"><input id="newCol" maxlength="40" placeholder="New column, e.g. Shopping"><button type="button" class="primary" id="addCol">+ Add</button></div>
     <div class="muted" style="font-size:12.5px;margin-top:4px">New columns go just before the last column.</div>
+    ${cols.some(isCal) ? '' : '<button type="button" id="addCal" style="margin-top:10px">📅 Add a calendar column</button>'}
     <div class="actions"><button type="button" onclick="closeModal()">Done</button></div>`);
   $('#mBody').onclick = async (e) => {
     const t = e.target.closest('button'); if (!t) return;
@@ -871,10 +955,11 @@ function boardSetup() {
     if (d.rm) {
       const c = cols.find((x) => x.id === Number(d.rm));
       const n = todos.filter((x) => x.column_id === c.id).length;
-      const to = cols.find((x) => x.id !== c.id);
+      const to = cols.find((x) => x.id !== c.id && !isCal(x));
       if (!(await ask(`Remove the "${c.name}" column?` + (n ? ` Its ${plural(n)} will move to "${to.name}".` : ''), 'Remove', true))) return boardSetup();
       return run(async () => { await api('/api/columns/' + d.rm, undefined, 'DELETE'); await loadBoard(); boardSetup(); });
     }
+    if (t.id === 'addCal') return run(async () => { await api('/api/columns', { kind: 'calendar' }); await loadBoard(); boardSetup(); toast('Calendar column added'); });
     if (t.id === 'addCol') return run(async () => {
       const name = $('#newCol').value.trim(); if (!name) throw new Error('Type a name for the column');
       await api('/api/columns', { name }); await loadBoard(); boardSetup();
@@ -990,7 +1075,7 @@ function listen() {
       await loadBoard().catch(() => {});
       if (cur && cur.id) {
         if (m.type === 'todo' && m.deleted && m.id === cur.id) { toast('This to-do was deleted on another screen', 'bad'); pending = {}; $('#newStep').value = ''; closeTicket(); }
-        else if (m.type === 'columns' || m.id === cur.id) refreshTicket().catch(() => {});
+        else if (m.type === 'columns' || m.type === 'calendar' || m.id === cur.id) refreshTicket().catch(() => {});
       }
     }, 250);
   };
