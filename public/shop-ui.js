@@ -10,7 +10,7 @@ const Shop = (() => {
 
   // ---------- start-up (shop accounts only) ----------
   async function init() {
-    $('#partsBtn').hidden = false; $('#scanBtn').hidden = false; $('#custBtn').hidden = false; $('#qboBtn').hidden = false;
+    $('#partsBtn').hidden = false; $('#scanBtn').hidden = false; $('#custBtn').hidden = false; $('#qboBtn').hidden = !me.account.qbo_on;
     await Promise.all([loadParts(), loadCustomers(), api('/api/shop/settings').then((s) => { settings = s; }), qboStatus()]).catch(() => {});
     // Back from signing in to QuickBooks.
     const h = /^#qbo=(.*)$/.exec(location.hash);
@@ -282,7 +282,7 @@ const Shop = (() => {
   });
   // ---------- QuickBooks status on the job ----------
   function qbLine() {
-    if (!qbJob || !qbState || !qbState.configured) return '';
+    if (!qbJob || !qbState || !qbState.enabled || !qbState.configured || qbJob.enabled === false) return '';
     const st = qbJob.state;
     if (!qbJob.connected && st !== 'synced') return `<div class="qbline">📊 QuickBooks isn't connected. ${st === 'not_yet' ? '' : 'This invoice waits and goes when it is. '}<button type="button" id="qbOpen" class="sm" style="padding:3px 9px">QuickBooks…</button></div>`;
     if (st === 'not_yet') return '<div class="qbline">📊 Goes to QuickBooks when the invoice is sent or printed, a payment is added, or the job is finished.</div>';
@@ -293,6 +293,7 @@ const Shop = (() => {
   }
   async function qboStatus() {
     qbState = await api('/api/qbo/status');
+    if (!qbState.enabled) return qbState;
     const w = qbState.waiting.total;
     $('#qboDot').textContent = !qbState.configured || !qbState.connected ? '📊' : qbState.needs_reconnect || qbState.errors.length || qbState.last_sync_error ? '⚠️' : w ? '⏳' : '✅';
     return qbState;
@@ -426,7 +427,7 @@ const Shop = (() => {
         run(async () => { await api('/api/shop/customers/' + id, undefined, 'DELETE'); await loadCustomers(); customersDialog(); });
       };
       $('#jobForCust').onclick = () => {
-        closeModal(); newTicket(cols[0].id);
+        closeModal(); newTicket(firstCol().id);
         pickCustomer(customers.find((x) => x.id === id) || c);
         setTimeout(() => $('#tTitle').focus(), 80);
       };
