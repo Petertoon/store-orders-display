@@ -74,6 +74,12 @@
   .storeset { border: 1px solid var(--line); border-radius: 10px; padding: 4px 12px 12px; margin-top: 12px; }
   @media (max-width: 900px) { .sp .cols { grid-template-columns: 1fr; } }
   @media (max-width: 600px) { .tabs { flex-wrap: wrap; padding: 8px 8px 0; gap: 2px; } .tabs button { padding: 9px 10px; font-size: 14.5px; } .bar input { width: 100%; } .two { grid-template-columns: 1fr; } .top .who { width: 100%; order: 5; } }
+  /* a thin bar with ✕ that stays at the top while the dialog scrolls (covers what scrolls under it) */
+  .modal .mtop { position: sticky; top: -22px; z-index: 3; margin: -22px -22px -30px; padding: 8px 8px 0; height: 52px; display: flex; justify-content: flex-end; pointer-events: none; }
+  .modal .mtop::before { content: ''; position: absolute; inset: 0; background: var(--panel); border-radius: 14px 14px 0 0; opacity: 0; transition: opacity .15s; }
+  .modal.scrolled .mtop::before { opacity: 1; }
+  .modal .mclose { position: relative; pointer-events: auto; width: 42px; height: 42px; padding: 0; border-radius: 50%; font-size: 20px; background: #26334d; color: var(--ink); }
+  .modal .mtop + h2, .modal .mtop + * h2:first-child { padding-right: 46px; }
 </style>
 </head>
 <body>
@@ -109,9 +115,10 @@ let data = null, tab = 'todo';
 const ORDER = ['todo', 'shop', 'store'];
 const when = (d) => (d ? new Date(d).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'never');
 async function run(fn) { try { return await fn(); } catch (e) { toast(e.message, 'bad'); return null; } }
-function openModal(html) { const mb = $('#mBody'); mb.onclick = mb.oninput = null; mb.innerHTML = html; $('#m').classList.add('open'); return mb; }
+function openModal(html) { const mb = $('#mBody'); mb.onclick = mb.oninput = null; mb.innerHTML = '<div class="mtop"><button type="button" class="mclose" title="Close" aria-label="Close" onclick="closeModal()">✕</button></div>' + html; $('#m').classList.add('open'); return mb; }
 function closeModal() { $('#m').classList.remove('open'); $('#mBody').innerHTML = ''; }
 $('#m').addEventListener('mousedown', (e) => { if (e.target.id === 'm') closeModal(); });
+$('#mBody').addEventListener('scroll', (e) => e.target.classList.toggle('scrolled', e.target.scrollTop > 4));
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
 function ask(q, yes = 'Yes', danger = false) {
   return new Promise((resolve) => {
