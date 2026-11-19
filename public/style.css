@@ -1,43 +1,89 @@
-/* HomeBoard: shared dark look */
+/* HomeBoard shared look. Two themes, the same as Peter's other programs (THEME-HANDOVER.md):
+   Ranch = parchment, tan, forest green, burgundy (the Lokaal website); Dark = charcoal, lime, gold (the Lokaal menu).
+   <html data-theme="ranch|dark"> is set before the page draws (small script in each page's <head>) and from the
+   account's setting after sign-in. Every page colors itself with the variables below, so a theme is just a set of
+   values. Colors people pick themselves (board columns, family colors, store colors) are never changed by the theme.
+   Invoices and customer pages are separate plain-white pages and always print black on white. */
+
+/* ===== DARK (also the fallback) ===== */
 :root {
-  --bg: #0b1220; --panel: #131c2e; --card: #18233a; --line: #26334d; --ink: #e8eefc; --muted: #8fa0bf;
-  --accent: #3b82f6; --danger: #e5484d; --ok: #22c55e;
+  --bg: #121418; --panel: #1d2027; --panel2: #1b1e24; --card: #22262e; --line: #2e323b;
+  --ink: #f1f2f4; --muted: #9aa0aa; --label: #c9cdd4; --link: #8fd16a;
+  --top: #17191e; --toptx: #f1f2f4; --topline: #2a2e36; --brand: #f1f2f4; --brand2: #8fd16a;
+  --btn: #2a2e36; --btntx: #f1f2f4; --btnline: #353a44;
+  --input: #16181d; --inputline: #353a44; --ph: #6f7580;
+  --accent: #1f8f4e; --accenttx: #fff; --focus: #7cc04a;
+  --sel: #1f2a17; --selb: #7cc04a; --seltx: #8fd16a;               /* selected tab / chip: lime outline on a green tint */
+  --head: #d9a93a;                                                  /* section headings: gold */
+  --danger: #ef5350; --dangertx: #ff8a80; --owed: #ff5a5a; --paid: #8fe3a5; --ok: #5fbf3a;
+  --warn: #f0b46a; --warnbg: #3a2a12; --due: #f0d27a;
+  --info: #9cc8ff; --infobg: #182a3f; --okbg: #1f3a24; --badbg: #3a1f1f;
+  --tint: rgba(255,255,255,.06); --tint2: rgba(255,255,255,.1);
+  --overlay: rgba(10,11,13,.94); --shade: rgba(0,0,0,.55);
+  --osk: #0e1013; --key: #2a2e36; --keymod: #1d2027; --keytx: #f1f2f4;
+  --toast: #2a2e36; --scheme: dark;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
+
+/* ===== RANCH ===== */
+html[data-theme=ranch] {
+  --bg: #efe5cf; --panel: #fbf7ee; --panel2: #f7f0e1; --card: #fffaf0; --line: #dccdb0;
+  --ink: #2b2417; --muted: #7a6a50; --label: #4a3d28; --link: #2f5a2a;
+  --top: linear-gradient(180deg, #e7d4ac, #d9c093); --toptx: #2b2010; --topline: #c4a874; --brand: #7f3b33; --brand2: #2f5a2a;
+  --btn: #ece2cc; --btntx: #2b2417; --btnline: #cdbb98;
+  --input: #ffffff; --inputline: #cdbb98; --ph: #a0907a;
+  --accent: #2f5a2a; --accenttx: #fff; --focus: #2f5a2a;
+  --sel: #7f3b33; --selb: #7f3b33; --seltx: #f6ead6;               /* selected: solid burgundy pill */
+  --head: #7f3b33;                                                  /* section headings: burgundy */
+  --danger: #8b2e24; --dangertx: #8b2e24; --owed: #8b2e24; --paid: #2f5a2a; --ok: #2f5a2a;
+  --warn: #9a5b12; --warnbg: #f6e3c0; --due: #8b2e24;
+  --info: #24496e; --infobg: #dde8f0; --okbg: #dfe9d4; --badbg: #f3dcd6;
+  --tint: rgba(80,60,20,.06); --tint2: rgba(80,60,20,.1);
+  --overlay: rgba(239,229,207,.96); --shade: rgba(43,36,23,.45);
+  --osk: #d9c9a6; --key: #fbf7ee; --keymod: #e6d7b8; --keytx: #2b2417;
+  --toast: #2b2417; --scheme: light;
+}
+
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html, body { margin: 0; background: var(--bg); color: var(--ink); }
+html, body { margin: 0; background: var(--bg); color: var(--ink); color-scheme: var(--scheme); }
 body { font-size: 16px; -webkit-text-size-adjust: 100%; }
-a { color: #8cb4ff; }
+a { color: var(--link); }
 button, input, select, textarea { font: inherit; }
-button { cursor: pointer; border: 0; border-radius: 8px; padding: 10px 16px; background: #1e2a44; color: var(--ink); font-weight: 600; touch-action: manipulation; }
-button:hover { filter: brightness(1.12); }
+button { cursor: pointer; border: 0; border-radius: 8px; padding: 10px 16px; background: var(--btn); color: var(--btntx); font-weight: 600; touch-action: manipulation; }
+html[data-theme=ranch] button { box-shadow: inset 0 0 0 1px rgba(120,95,50,.18); }
+button:hover { filter: brightness(1.06); }
 button:disabled { opacity: .5; cursor: default; }
-button.primary { background: var(--accent); color: #fff; }
-button.danger { background: var(--danger); color: #fff; }
+button.primary { background: var(--accent); color: var(--accenttx); box-shadow: none; }
+button.danger { background: var(--danger); color: #fff; box-shadow: none; }
 button.ghost { background: transparent; border: 1px solid var(--line); }
-input, select, textarea { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #0f1729; width: 100%; color: var(--ink); }
-input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+input, select, textarea { padding: 10px 12px; border: 1px solid var(--inputline); border-radius: 8px; background: var(--input); width: 100%; color: var(--ink); }
+input::placeholder, textarea::placeholder { color: var(--ph); }
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--focus); outline-offset: -1px; }
 input[type=color] { padding: 2px; height: 38px; }
-label { display: block; font-size: 14px; font-weight: 600; margin: 12px 0 4px; color: #c3cee6; }
+label { display: block; font-size: 14px; font-weight: 600; margin: 12px 0 4px; color: var(--label); }
 label.check { display: flex; align-items: center; gap: 8px; font-weight: 500; }
 label.check input { width: auto; }
 .muted { color: var(--muted); }
-.err { color: #ff8a8a; min-height: 22px; margin-top: 10px; font-size: 14px; }
+.err { color: var(--dangertx); min-height: 22px; margin-top: 10px; font-size: 14px; }
+.money, .tots, .line .lt { font-variant-numeric: tabular-nums; }
 
 /* sign-in pages */
-.auth { max-width: 420px; margin: 8vh auto; background: var(--panel); padding: 28px; border-radius: 14px; }
+.auth { max-width: 420px; margin: 8vh auto; background: var(--panel); padding: 28px; border-radius: 14px; border: 1px solid var(--line); box-shadow: 0 2px 10px rgba(0,0,0,.08); }
 .auth h1 { margin: 0 0 6px; font-size: 28px; }
 .auth button[type=submit] { width: 100%; margin-top: 18px; padding: 13px; }
 
 /* toast */
-#toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); background: #222c40; color: #fff; padding: 12px 18px; border-radius: 10px; opacity: 0; transition: .2s; pointer-events: none; z-index: 300; max-width: 90vw; text-align: center; font-weight: 600; box-shadow: 0 6px 24px rgba(0,0,0,.4); }
+#toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); background: var(--toast); color: #fff; padding: 12px 18px; border-radius: 10px; opacity: 0; transition: .2s; pointer-events: none; z-index: 300; max-width: 90vw; text-align: center; font-weight: 600; box-shadow: 0 6px 24px rgba(0,0,0,.3); }
 #toast.show { opacity: 1; transform: translateX(-50%); }
 #toast.bad { background: var(--danger); }
+html[data-theme=ranch] #toast.bad { background: #7f3b33; }
 
 /* dialogs */
-.modal-back { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; z-index: 60; padding: 16px; }
+.modal-back { position: fixed; inset: 0; background: var(--shade); display: none; align-items: center; justify-content: center; z-index: 60; padding: 16px; }
 .modal-back.open { display: flex; }
-.modal { background: var(--panel); color: var(--ink); border-radius: 14px; padding: 22px; width: 100%; max-width: 520px; max-height: 92vh; overflow: auto; }
+.modal { background: var(--panel); color: var(--ink); border-radius: 14px; padding: 22px; width: 100%; max-width: 520px; max-height: 92vh; overflow: auto; border: 1px solid var(--line); }
+html[data-theme=ranch] .modal { background: #f4ecdb; }
 .modal h2 { margin: 0 0 6px; }
+html[data-theme=ranch] .modal h2 { color: var(--head); }
 .modal .actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; flex-wrap: wrap; }
