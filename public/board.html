@@ -310,7 +310,7 @@
   <button class="dk" id="qboBtn" hidden><span id="qboDot">📊</span><span class="hide-sm"> QuickBooks</span></button>
   <button class="dk" id="familyBtn"><span id="pIcon">👪</span><span class="hide-sm" id="pLabel"> Family</span></button>
   <button class="mebtn" id="meBtn" title="Switch person"><i class="dot"></i><span>Who?</span></button>
-  <button class="dk" id="signOutBtn" title="Sign out this screen" hidden>⏻<span class="hide-sm"> Sign out</span></button>
+  <button class="dk" id="signOutBtn" title="Sign out this screen" hidden>🚪<span class="hide-sm"> Sign out</span></button>
   <span id="clock"></span>
 </header>
 <div class="adminbar" id="adminBar" hidden>👁 Admin view of <b id="abName"></b> <span id="abOff"></span><span style="flex:1"></span><button type="button" id="abBack">← Back to admin</button></div>
@@ -351,6 +351,7 @@
 <script src="/keys.js"></script>
 <script src="/shop-ui.js"></script>
 <script src="/shopping-ui.js"></script>
+<script src="/security-ui.js"></script>
 <script src="/brand.js"></script>
 <script>
 const SCREEN = Math.random().toString(36).slice(2, 10); // tells this screen's own saves apart from other screens'
@@ -994,10 +995,9 @@ function familyDialog() {
       <div class="mcolors">${PICK.map((c) => `<button type="button" class="sw ${c === m.color.toLowerCase() ? 'on' : ''}" data-color="${c}" style="--mc:${c}" title="Use this color"></button>`).join('')}</div></div>`).join('')}</div>
     <div class="addrow" style="margin-top:10px"><input id="newMem" type="text" maxlength="40" placeholder="Add a person"><button type="button" class="primary" id="addMem">+ Add</button></div>
     <hr><label>Name of this ${W.place}</label><div class="addrow"><input id="houseName" type="text" maxlength="80" value="${esc(me.household.name)}"><button type="button" id="saveHouse">Save</button></div>
-    ${me.admin ? '<div class="muted" style="font-size:13px;margin-top:10px">You are viewing this account as admin. Its sign-in and password are changed on the admin page.</div>' : `<label>Change the ${W.place} password</label>
-    <div class="two"><input id="pwCur" type="password" placeholder="Current password" autocomplete="current-password"><input id="pwNew" type="password" placeholder="New (8+ characters)" autocomplete="new-password"></div>
-    <button type="button" id="savePw" style="margin-top:8px">Change password</button>
-    <div class="muted" style="font-size:13px;margin-top:6px">Signed in as ${esc(me.email)}</div>`}
+    ${me.admin ? '<div class="muted" style="font-size:13px;margin-top:10px">You are viewing this account as support. For the owner\'s security, only the owner can change its sign-in, password and backup email.</div>' : `<label>Sign-in &amp; security</label>
+    <button type="button" id="secBtn">🔒 Login &amp; security</button>
+    <div class="muted" style="font-size:13px;margin-top:6px">Signed in as ${esc(me.email)}. Change the password and backup email, make a code for support, and see who opened this ${W.place}.</div>`}
     <div class="actions">${me.admin ? '' : '<button type="button" class="danger" id="logoutBtn" style="margin-right:auto">Sign out this screen</button>'}<button type="button" onclick="closeModal()">Done</button></div>`);
   f.onclick = async (e) => {
     const t = e.target.closest('button'); if (!t) return;
@@ -1023,10 +1023,7 @@ function familyDialog() {
       await api('/api/members', { name, color: COLORS[members.length % COLORS.length] }); await reloadMe(); familyDialog();
     });
     if (t.id === 'saveHouse') return run(async () => { await api('/api/household', { name: $('#houseName').value }, 'PUT'); await reloadMe(); toast('Saved'); });
-    if (t.id === 'savePw') return run(async () => {
-      await api('/api/password', { current: $('#pwCur').value, password: $('#pwNew').value });
-      $('#pwCur').value = $('#pwNew').value = ''; toast('Password changed. Other screens need to sign in again.');
-    });
+    if (t.id === 'secBtn') { closeModal(); return HBSec.loginDialog({ owner: true, place: W.place }); }
     if (t.id === 'logoutBtn') { if (await ask('Sign out this screen?', 'Sign out')) logout(); else familyDialog(); }
   };
   $('#newMem').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#addMem').click(); } });
@@ -1057,8 +1054,11 @@ function applyAccount() {
   $('#adminBar').hidden = !me.admin;
   if (me.admin) {
     $('#abName').textContent = `${me.household.name} (${me.account.screen_label})`;
-    $('#abOff').innerHTML = me.account.active ? '' : '<span class="off">SWITCHED OFF</span>';
+    $('#abOff').innerHTML = (me.account.active ? '' : '<span class="off">SWITCHED OFF</span>') +
+      (me.acting_until ? ` · as support until <b>${new Date(me.acting_until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</b>` : '');
   }
+  // Owners without a backup email get the yellow bar (once per page load).
+  if (me.needs_backup && !applyAccount.backupShown) { applyAccount.backupShown = true; HBSec.backupBar(document.querySelector('header.top'), { owner: true, place: W.place }); }
 }
 $('#partsBtn').onclick = () => Shop.partsDialog();
 $('#custBtn').onclick = () => Shop.customersDialog();
