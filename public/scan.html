@@ -3,23 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f172a">
+<meta name="theme-color" content="#d9c093">
+<script>try { document.documentElement.dataset.theme = localStorage.getItem('hb_theme') || 'ranch'; } catch (e) { document.documentElement.dataset.theme = 'ranch'; }</script>
 <title>Shop Scanner</title>
 <link rel="stylesheet" href="/style.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%93%B7%3C/text%3E%3C/svg%3E">
 <style>
   body { padding-bottom: 40px; }
-  .head { background: #0f172a; border-bottom: 1px solid var(--line); padding: 14px 16px; padding-top: max(14px, env(safe-area-inset-top)); display: flex; align-items: center; gap: 10px; }
+  .head { background: var(--top); color: var(--toptx); border-bottom: 1px solid var(--topline); padding: 14px 16px; padding-top: max(14px, env(safe-area-inset-top)); display: flex; align-items: center; gap: 10px; }
   .head .t { flex: 1; min-width: 0; }
   .head b { font-size: 18px; display: block; }
-  .head span { color: var(--muted); font-size: 14px; }
-  .head .help { background: #1e2a44; padding: 8px 12px; }
+  .head b { color: var(--brand); }
+  .head span { color: var(--toptx); opacity: .8; font-size: 14px; }
+  .head .help { padding: 8px 12px; }
   main { padding: 14px; max-width: 520px; margin: 0 auto; }
-  .job { background: var(--panel); border-radius: 12px; padding: 12px 14px; border-left: 5px solid var(--accent); }
-  .job.none { border-left-color: #f59e0b; }
+  .job { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; border-left: 5px solid var(--accent); }
+  .job.none { border-left-color: var(--warn); }
   .job b { font-size: 18px; }
-  .job .ph { display: inline-block; margin-top: 4px; font-size: 13px; font-weight: 700; border-radius: 6px; padding: 2px 8px; background: #24345a; }
-  .job .ph.up { background: #3a2a0b; color: #fcd34d; }
+  .job .ph { display: inline-block; margin-top: 4px; font-size: 13px; font-weight: 700; border-radius: 6px; padding: 2px 8px; background: var(--tint2); }
+  .job .ph.up { background: var(--warnbg); color: var(--warn); }
   /* camera */
   .cam { position: relative; background: #000; border-radius: 12px; overflow: hidden; aspect-ratio: 4 / 3; margin-top: 12px; }
   .cam video { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -36,27 +38,27 @@
   .cambtn.on .dot { animation: blink 1s infinite; }
   @keyframes blink { 50% { opacity: .25; } }
   .status { text-align: center; font-size: 14px; margin-top: 6px; font-weight: 600; }
-  .status.on { color: #f87171; } .status.off { color: var(--muted); }
+  .status.on { color: var(--dangertx); } .status.off { color: var(--muted); }
   .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
   .row2 button { padding: 14px 8px; }
-  .result { margin-top: 12px; padding: 14px; border-radius: 12px; background: var(--panel); display: none; }
+  .result { margin-top: 12px; padding: 14px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); display: none; }
   .result.ok { display: block; border-left: 6px solid var(--ok); }
   .result.bad { display: block; border-left: 6px solid var(--danger); }
   .result b { font-size: 18px; }
-  .panel { background: var(--panel); border-radius: 12px; padding: 14px; margin-top: 12px; }
-  .panel h3 { margin: 0 0 8px; font-size: 16px; display: flex; justify-content: space-between; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-top: 12px; }
+  .panel h3 { margin: 0 0 8px; font-size: 16px; color: var(--head); display: flex; justify-content: space-between; }
   .item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); gap: 8px; }
   .item:last-child { border-bottom: 0; }
   .item small { color: var(--muted); display: block; }
-  .item .up { color: #fcd34d; }
-  .item .x { background: transparent; color: #ff8a8a; padding: 6px 10px; font-size: 18px; }
+  .item .up { color: var(--warn); }
+  .item .x { background: transparent; box-shadow: none; color: var(--dangertx); padding: 6px 10px; font-size: 18px; }
   .tot { display: flex; justify-content: space-between; font-size: 22px; font-weight: 800; margin-top: 10px; }
   .fatal { text-align: center; padding: 40px 20px; }
   form.inline { display: none; }
   form.inline.open { display: block; }
   form.inline button { width: 100%; margin-top: 12px; padding: 14px; }
   .tips ol { padding-left: 20px; margin: 6px 0; } .tips li { margin: 6px 0; }
-  .bcline { background: #0f1729; border-radius: 8px; padding: 8px 10px; font-size: 15px; }
+  .bcline { background: var(--panel2); border-radius: 8px; padding: 8px 10px; font-size: 15px; }
 </style>
 </head>
 <body>
@@ -164,7 +166,7 @@ function showResult(kind, html) { const r = $('#result'); r.className = 'result 
 
 async function load() {
   if (!pairToken) throw new Error('Open this page by scanning the QR code on the shop screen (📷 Scanner).');
-  render(await pairApi(''));
+  const first = await pairApi(''); applyTheme(first.theme); render(first);
   try { if (!localStorage.getItem('hb_scan_help_seen')) { $('#help').hidden = false; localStorage.setItem('hb_scan_help_seen', '1'); } } catch (e) { /* ok */ }
 }
 
