@@ -67,7 +67,9 @@ async function loadLogin(req) {
   const t = req.cookies[COOKIE];
   if (!t) return null;
   const { rows } = await pool.query(
-    `SELECT l.id, l.email, l.is_admin, l.household_id, s.acting_household_id
+    `SELECT l.id, l.email, l.is_admin, l.household_id, l.backup_email,
+            CASE WHEN s.acting_until > now() THEN s.acting_household_id END AS acting_household_id, s.acting_until,
+            (s.acting_household_id IS NOT NULL AND NOT s.acting_until > now()) AS acting_expired
        FROM sessions s JOIN logins l ON l.id = s.login_id
       WHERE s.token = $1 AND s.expires_at > now()`, [t]);
   // Screens that stay on (kitchen, shop, store) never get signed out: each day of use renews the sign-in.
@@ -86,7 +88,7 @@ const requireLogin = wrap(async (req, res, next) => {
   req.login = await loadLogin(req);
   if (!req.login) fail(401, 'Please sign in');
   const hid = req.login.is_admin ? req.login.acting_household_id : req.login.household_id;
-  if (!hid) fail(400, 'Open an account from the admin page first');
+  if (!hid) fail(400, req.login.acting_expired ? 'Your access to this account ended (it lasts 4 hours). Open it again from the admin page with a new code from the owner.' : 'Open an account from the admin page first');
   const a = await pool.query("SELECT id, name, screen, active, qbo_on, COALESCE(theme, 'ranch') AS theme FROM households WHERE id=$1", [hid]);
   if (!a.rows[0]) fail(400, 'Open an account from the admin page first');
   if (!a.rows[0].active && !req.login.is_admin) fail(403, 'This account is switched off. Contact the administrator.');
@@ -161,7 +163,8 @@ app.post('/api/logout', wrap(async (req, res) => {
 app.get('/api/me', requireLogin, wrap(async (req, res) => {
   const m = await pool.query('SELECT id, name, color FROM members WHERE household_id=$1 AND active ORDER BY position, id', [req.household_id]);
   res.json({ app_name: APP_NAME, admin: req.login.is_admin, account: { ...req.account, screen_label: SCREENS[req.account.screen].label },
-    household: { id: req.household_id, name: req.account.name }, email: req.login.email, member: req.login.is_admin ? null : req.member, members: m.rows });
+    household: { id: req.household_id, name: req.account.name }, email: req.login.email, member: req.login.is_admin ? null : req.member, members: m.rows,
+    acting_until: req.login.is_admin ? req.login.acting_until : null, needs_backup: !req.login.is_admin && !req.login.backup_email });
 }));
 
 // "Who are you?" on this screen.
@@ -184,15 +187,6 @@ app.put('/api/household/theme', requireLogin, wrap(async (req, res) => {
 app.put('/api/household', requireLogin, wrap(async (req, res) => {
   await pool.query('UPDATE households SET name=$1 WHERE id=$2', [text(req.body.name, 'Name', { max: 80 }), req.household_id]);
   board.notify(req.household_id, { type: 'members' });
-  res.json({ ok: true });
-}));
-app.post('/api/password', requireSignIn, wrap(async (req, res) => {
-  const l = await pool.query('SELECT * FROM logins WHERE id=$1', [req.login.id]);
-  if (!(await bcrypt.compare(String(req.body.current || ''), l.rows[0].password_hash))) fail(400, 'The current password is wrong');
-  const pw = cleanPassword(req.body.password, 'The new password');
-  await pool.query('UPDATE logins SET password_hash=$1 WHERE id=$2', [await bcrypt.hash(pw, 10), req.login.id]);
-  // Sign out every other screen.
-  await pool.query('DELETE FROM sessions WHERE login_id=$1 AND token<>$2', [req.login.id, req.cookies[COOKIE]]);
   res.json({ ok: true });
 }));
 async function addMember(db, hid, name, color) {
@@ -274,6 +268,10 @@ app.put('/api/admin/accounts/:id', ...A, wrap(async (req, res) => {
     await db.query('UPDATE households SET name=$1, screen=$2, active=$3, qbo_on=$4, theme=$5 WHERE id=$6', [name, screen, active, qboOn, theme, id]);
     // Store Orders accounts: their store settings (needed the first time an account moves to the Store Orders tab).
     if (screen === 'store' && (req.body.store || !(await stores.settingsFor(id, db)))) await stores.saveSettings(db, id, name, req.body.store || {});
+    // No back doors: changing the owner's sign-in is for the owner, except on the account's setup days (logged).
+    const cur = (await db.query('SELECT email FROM logins WHERE household_id=$1 ORDER BY id LIMIT 1', [id])).rows[0];
+    if (req.body.email && cur && cleanEmail(req.body.email) !== cur.email) await security.noBackdoor(req, id, "change the owner's login email", db);
+    if (req.body.password && cur) await security.noBackdoor(req, id, "change the owner's password", db);
     if (req.body.email) {
       const email = cleanEmail(req.body.email);
       if ((await db.query('SELECT 1 FROM logins WHERE email=$1 AND household_id IS DISTINCT FROM $2', [email, id])).rows.length) fail(400, 'That email is already used');
@@ -295,17 +293,9 @@ app.delete('/api/admin/accounts/:id', ...A, wrap(async (req, res) => {
   if (!r.rows[0]) fail(404, 'Account not found');
   res.json({ ok: true });
 }));
-// Open an account's screen (see what they see). Leave goes back to the admin page.
-app.post('/api/admin/open/:id', ...A, wrap(async (req, res) => {
-  const h = await pool.query('SELECT id FROM households WHERE id=$1', [Number(req.params.id) || 0]);
-  if (!h.rows[0]) fail(404, 'Account not found');
-  await pool.query('UPDATE sessions SET acting_household_id=$1 WHERE token=$2', [h.rows[0].id, req.cookies[COOKIE]]);
-  res.json({ ok: true });
-}));
-app.post('/api/admin/leave', ...A, wrap(async (req, res) => {
-  await pool.query('UPDATE sessions SET acting_household_id=NULL WHERE token=$1', [req.cookies[COOKIE]]);
-  res.json({ ok: true });
-}));
+// Opening an account's screen, the support code window and the access log are in security.js.
+const security = require('./security')(app, { pool, wrap, fail, text, bcrypt, cleanEmail, cleanPassword, requireSignIn, requireAdmin, requireLogin,
+  COOKIE, email: require('./email'), appName: APP_NAME });
 
 // ---------- the board ----------
 const board = require('./board')(app, { pool, wrap, fail, text, cleanColor, requireLogin });
