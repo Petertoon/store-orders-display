@@ -1,7 +1,7 @@
-[HANDOVER (33).md](https://github.com/user-attachments/files/35059487/HANDOVER.33.md)
+[HANDOVER (37).md](https://github.com/user-attachments/files/35100723/HANDOVER.37.md)
 # HomeBoard — Build Handover
 
-Last updated: 2026-11-18 · **HomeBoard v2.5.0** · repo `Petertoon/store-orders-display` · live at
+Last updated: 2026-11-18 · **HomeBoard v2.6.0** · repo `Petertoon/store-orders-display` · live at
 `https://store-orders-display.onrender.com` (Render Starter, Postgres via `DATABASE_URL`).
 Built from the ContractorPOS v1.7.1 job board; the old store-orders-display system was moved in.
 **Attach this file plus the repo files (or a zip of the repo) to a new chat.**
@@ -183,10 +183,16 @@ Shared: `households`, `logins`, `sessions`, `members`, `board_columns` (+ kind, 
 - **Mama's To-Do:** 📅 Calendar column (`board_columns.kind='calendar'`, at the left, sends items to Today on their
   day, checked every minute in `TIME_ZONE`, default America/Chicago), 🛒 Shopping lists (`shop_pages`, `shop_items`,
   up to 5 pages), family colors are 12 circles to tap, ⌨ on-screen keyboard and 🎤 voice everywhere, ✕ on every dialog.
+- **Store Orders columns (v2.5):** New never changes (bell, alerts, Start picking). After it come the store's own
+  columns (`store_columns`, per store code; defaults Picking + Ready for Pickup; up to 6), set with ⚙ Columns or a
+  column's ⚙: name, color, up to 4 labeled buttons (each can move the order to the top/bottom). Orders there have
+  ‹ Back, ▲ ▼ ⤒ Top (`tickets.sort_pos`), the column buttons (`tickets.flags`), and "Next column ›". The last column
+  = status `ready` (not late) with Picked up (tap twice) to clear; others = `picking`. API: `/api/store/columns[/:id][/move]`,
+  `/api/store/tickets/:id/column|order|flag`. Old `/status` calls still work (picking = first column, ready = last).
 - **Store Orders:** `POST /webhook/wix-order?token=…`, split by SKU prefix, store screens, Pi print agent
   (`/api/agent/poll`, HMAC keys from `MASTER_KEY`), emails over SMTP. Not yet tried for real: a live Wix order to the
   new address, the real Pi + printer, SMTP.
-- **Render env:** `DATABASE_URL` (required), `QBO_*` (QuickBooks), `SMTP_*` + `EMAIL_FROM` (email), `MASTER_KEY`,
+- **Render env:** `DATABASE_URL` (required), `QBO_*` (QuickBooks), `RESEND_API_KEY` (email, preferred) or `SMTP_*`, `EMAIL_FROM`, `MASTER_KEY`,
   `WEBHOOK_TOKEN` (store orders), `PUBLIC_URL`, `TIME_ZONE`, `APP_NAME` (all optional).
 - **Tests** (kept outside the repo): real Postgres + real Chrome (Playwright). API suites for board, admin, store,
   shop, QuickBooks (fake Intuit server), shopping, calendar; browser suites for each screen, phone layouts, two screens
@@ -208,6 +214,29 @@ forest green, burgundy) is the default; **Dark** is charcoal, lime and gold.
 - Colors people pick stay their own: column header/card colors, family colors, store colors, button colors.
   Board column presets: "Standard (follows the look)" leaves the column on the theme colors.
 - Invoices (`/invoice/:id`, `/i/:code`) are separate plain pages and always print black on white.
+
+## 7c. Security (v2.6): support access codes + account recovery
+
+Same rules and numbers as MultiPOS (SECURITY-HANDOVER.md); code in `security.js` and `public/security-ui.js`.
+- **Admin → Open screen** asks for a **6-digit code from the owner**: "✉️ Email a code" (owner's email, backup, or
+  both; 5 per hour) or a code the owner made on their screen. Once, 15 minutes, 5 wrong tries. Access lasts
+  **4 hours** (`sessions.acting_until`; the "Admin view of …" bar shows "until"). **Setup days:** the first 3 days
+  after an account is made it opens without a code. Everything is logged (`support_access_log`).
+- **No back doors:** after setup days the admin can't change an account's sign-in email or password (Edit dialog);
+  only the owner can (🔒 Login & security, or Forgot password?).
+- **Owner screens:** Family/Crew → 🔒 Login & security (board) or 🔒 Login (store): backup email, new password,
+  current password; **Make a code for support**; **Who opened your account** log. The admin's own: 🔒 My login.
+- **Backup email** required for every login (all are owners or admins); yellow "Add a backup email" bar until set.
+- **Forgot password?** on the sign-in page → reset link to the login and backup email (once, 30 minutes, newest
+  only; `/reset#token`), same answer for unknown emails, 5/hour. Reset signs out every device. Any password or backup
+  change emails a "Your login was changed" notice.
+- Codes and reset tokens are stored as SHA-256 hashes only.
+- **Email:** `email.js` sends with **Resend** when `RESEND_API_KEY` is set (from `receipts@lokaalhub.com`, or
+  `EMAIL_FROM`), otherwise SMTP, otherwise off (then codes come only from the owner's screen).
+- API: `GET /api/admin/access/:id`, `POST /api/admin/access/:id/send`, `POST /api/admin/enter/:id` (old
+  `/api/admin/open/:id` follows the same rules), `POST /api/admin/leave`, `POST /api/support/code`,
+  `GET /api/support/log`, `GET /api/me/login`, `POST /api/me/password` (old `/api/password` too),
+  `POST /api/password/forgot|reset-info|reset`.
 
 ## 8. Plan: Farm & Ranch version of Papa's Shop
 
