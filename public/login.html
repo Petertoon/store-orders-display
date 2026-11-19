@@ -28,6 +28,12 @@
   <input id="pw" type="password" autocomplete="current-password" required>
   <button class="primary" type="submit">Sign in</button>
   <div class="err" id="err"></div>
+  <div style="text-align:center"><a href="#" id="forgot">Forgot password?</a></div>
+  <div id="fbox" hidden>
+    <p class="muted" style="font-size:14px">Type your login email. A reset link goes to it and to your backup email.</p>
+    <div style="display:flex;gap:8px"><input id="femail" type="email" placeholder="Login email"><button type="button" id="fsend" style="white-space:nowrap">Send link</button></div>
+    <div class="muted" id="fmsg" style="font-size:14px;margin-top:8px"></div>
+  </div>
 </form>
 <script src="/app.js"></script>
 <script src="/brand.js"></script>
@@ -54,6 +60,18 @@ api('/api/setup-status').then((s) => {
   if (s.needs_setup) location.href = '/setup';
   if (!k) { $('#app').textContent = s.app_name; document.title = s.app_name + ' · Sign in'; }
 }).catch(() => {});
+// Forgot password: the same answer whether or not the email has a login.
+$('#forgot').onclick = (e) => { e.preventDefault(); $('#fbox').hidden = false; $('#femail').value = $('#email').value; $('#femail').focus(); };
+$('#fsend').onclick = async () => {
+  const em = $('#femail').value.trim(); if (!em) return $('#femail').focus();
+  $('#fsend').disabled = true;
+  try {
+    const r = await api('/api/password/forgot', { email: em });
+    $('#fmsg').textContent = r.email_ok === false ? 'Email isn\'t set up on this program yet, so reset links can\'t be sent. Contact support.'
+      : 'If that email has a login, a reset link is on its way to it and to its backup email. It works once, for 30 minutes. Check spam too.';
+  } catch (err) { $('#fmsg').textContent = err.message; }
+  $('#fsend').disabled = false;
+};
 $('#f').addEventListener('submit', async (e) => {
   e.preventDefault(); $('#err').textContent = '';
   try {
