@@ -310,6 +310,7 @@
   <button class="dk" id="qboBtn" hidden><span id="qboDot">📊</span><span class="hide-sm"> QuickBooks</span></button>
   <button class="dk" id="familyBtn"><span id="pIcon">👪</span><span class="hide-sm" id="pLabel"> Family</span></button>
   <button class="mebtn" id="meBtn" title="Switch person"><i class="dot"></i><span>Who?</span></button>
+  <button class="dk" id="signOutBtn" title="Sign out this screen" hidden>⏻<span class="hide-sm"> Sign out</span></button>
   <span id="clock"></span>
 </header>
 <div class="adminbar" id="adminBar" hidden>👁 Admin view of <b id="abName"></b> <span id="abOff"></span><span style="flex:1"></span><button type="button" id="abBack">← Back to admin</button></div>
@@ -1031,6 +1032,7 @@ function familyDialog() {
   $('#newMem').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#addMem').click(); } });
 }
 $('#familyBtn').onclick = familyDialog;
+$('#signOutBtn').onclick = async () => { if (await ask('Sign out this screen? You will need the email and password to sign back in.', 'Sign out')) logout(); };
 $('#shopListBtn').onclick = () => Shopping.open();
 async function reloadMe() {
   me = await api('/api/me'); members = me.members;
@@ -1040,6 +1042,7 @@ async function reloadMe() {
 // Name, icon, words and the admin bar for this account's kind of screen.
 function applyAccount() {
   applyTheme(me.account.theme); // Ranch or Dark, the account's own look
+  $('#signOutBtn').hidden = !!me.admin; // the admin uses "Back to admin" instead
   isShop = me.account.screen === 'shop';
   W = WORDS[me.account.screen] || WORDS.todo;
   $('#house').textContent = me.household.name; $('#bIcon').textContent = W.icon;
