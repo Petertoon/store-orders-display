@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reset password</title>
+<script>try { document.documentElement.dataset.theme = localStorage.getItem('hb_theme') || 'ranch'; } catch (e) { document.documentElement.dataset.theme = 'ranch'; }</script>
+<link rel="stylesheet" href="/style.css">
+<meta name="theme-color" content="#d9c093">
+</head>
+<body>
+<!-- The link from a "Forgot password?" email: /reset#<token>. The token stays after # so it never reaches server logs. -->
+<form class="auth" id="f" autocomplete="off">
+  <h1 style="color:var(--head)">🔒 Choose a new password</h1>
+  <div class="muted" id="who">Checking the link…</div>
+  <div id="fields" hidden>
+    <label for="pw">New password (8 or more characters)</label><input id="pw" type="password" autocomplete="new-password" minlength="8" required>
+    <label for="pw2">Type it again</label><input id="pw2" type="password" autocomplete="new-password" minlength="8" required>
+    <label for="backup">Backup email</label><input id="backup" type="email" placeholder="another email you check">
+    <div class="muted" id="bnote" style="font-size:13px;margin-top:4px"></div>
+    <button class="primary" type="submit">Save new password</button>
+  </div>
+  <div class="err" id="err"></div>
+  <div id="done" hidden><p>✓ Your password is changed. <b>All devices were signed out</b>, so sign in again with the new password.</p><a href="/login">Sign in</a></div>
+</form>
+<script src="/app.js"></script>
+<script>
+const tok = location.hash.slice(1);
+(async () => {
+  try {
+    const r = await api('/api/password/reset-info', { token: tok });
+    $('#who').innerHTML = 'For the login <b>' + esc(r.email) + '</b>.';
+    $('#bnote').textContent = r.has_backup ? 'Your backup email is ' + r.backup + '. Leave this empty to keep it, or type a new one.'
+      : 'Required: an email different from your login email. Next time, reset links go to both.';
+    $('#backup').required = !r.has_backup;
+    $('#fields').hidden = false; $('#pw').focus();
+  } catch (e) { $('#who').textContent = ''; $('#err').innerHTML = esc(e.message) + ' <a href="/login">Back to sign in</a>'; }
+})();
+$('#f').addEventListener('submit', async (e) => {
+  e.preventDefault(); $('#err').textContent = '';
+  if ($('#pw').value !== $('#pw2').value) { $('#err').textContent = "The two passwords don't match"; return; }
+  try {
+    await api('/api/password/reset', { token: tok, password: $('#pw').value, backup_email: $('#backup').value });
+    $('#fields').hidden = true; $('#who').hidden = true; $('#done').hidden = false;
+    try { history.replaceState(null, '', '/reset'); } catch (err) { /* ok */ }
+  } catch (err) { $('#err').textContent = err.message; }
+});
+</script>
+</body>
+</html>
