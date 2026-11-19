@@ -97,7 +97,7 @@ const Shop = (() => {
         <div class="pick" id="pMethod">${Object.entries(METHODS).map(([k, v], i) => `<button type="button" data-m="${k}" class="${i === 0 ? 'on' : ''}">${v}</button>`).join('')}</div>
         <div class="crow" style="justify-content:flex-end"><button type="button" id="pCancel">Cancel</button><button type="button" class="primary" id="pAdd">Add payment</button></div>
       </div>
-      <div class="invb"><button type="button" id="payBtn" class="primary" style="background:#16a34a" ${m.lines.length ? '' : 'disabled'}>💵 Take payment</button>
+      <div class="invb"><button type="button" id="payBtn" class="primary" ${m.lines.length ? '' : 'disabled'}>💵 Take payment</button>
         <button type="button" id="sendBtn" ${m.lines.length ? '' : 'disabled'}>📤 Send invoice</button>
         <button type="button" id="invBtn" ${m.lines.length ? '' : 'disabled'}>🧾 View / print invoice</button></div>
       ${qbLine()}`;
@@ -320,12 +320,12 @@ const Shop = (() => {
            ${w.total ? `<div class="qbst">⏳ <b>${w.jobs} invoice(s)</b> and <b>${w.payments} payment(s)</b> are waiting. They go as soon as QuickBooks is connected.</div>` : ''}
            <div class="actions" style="justify-content:flex-start"><button type="button" class="primary" id="qbConnect">Connect to QuickBooks</button></div>`
         : `<div class="qbst">Connected to <b>${esc(st.company_name || 'QuickBooks')}</b>${st.connected_env === 'sandbox' ? ' (sandbox: test company)' : ''}<br>
-             ${st.needs_reconnect ? '<b style="color:#fca5a5">⚠ The connection expired. Connect again; nothing is lost.</b><br>' : ''}
+             ${st.needs_reconnect ? '<b style="color:var(--dangertx)">⚠ The connection expired. Connect again; nothing is lost.</b><br>' : ''}
              Last sync: ${st.last_sync_at ? new Date(st.last_sync_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'not yet'}${st.syncing ? ' · syncing…' : ''}<br>
              ${w.total ? `⏳ Waiting: ${w.jobs} invoice(s), ${w.payments} payment(s)${w.removals ? `, ${w.removals} removal(s)` : ''}` : '✅ Everything is in QuickBooks'}
-             ${st.last_sync_error ? `<br><span style="color:#fca5a5">⚠ ${esc(st.last_sync_error)}</span>` : ''}</div>
-           ${st.errors.length ? `<div class="qbst" style="color:#fca5a5">${st.errors.map((e) => `Job #${esc(e.job_number)} ${esc(e.title || '')}: ${esc(e.qbo_error)}`).join('<br>')}</div>` : ''}
-           ${acc && acc.error ? `<div class="qbst" style="color:#fca5a5">${esc(acc.error)}</div>` : ''}
+             ${st.last_sync_error ? `<br><span style="color:var(--dangertx)">⚠ ${esc(st.last_sync_error)}</span>` : ''}</div>
+           ${st.errors.length ? `<div class="qbst" style="color:var(--dangertx)">${st.errors.map((e) => `Job #${esc(e.job_number)} ${esc(e.title || '')}: ${esc(e.qbo_error)}`).join('<br>')}</div>` : ''}
+           ${acc && acc.error ? `<div class="qbst" style="color:var(--dangertx)">${esc(acc.error)}</div>` : ''}
            ${acc && !acc.error ? `<label>Income account for parts &amp; labor</label><select id="qbInc">${opt(acc.income, st.settings.income_account_id, 'Choose…')}</select>
              <label>Payments go to</label><select id="qbDep">${opt(acc.bank, st.settings.deposit_account_id, 'Undeposited Funds (group them into bank deposits in QuickBooks)')}</select>
              <div class="muted" style="font-size:13px;margin-top:4px">Undeposited Funds is best when several payments go to the bank together; QuickBooks Banking then matches the deposit.</div>` : ''}
@@ -333,7 +333,7 @@ const Shop = (() => {
              <button type="button" class="danger" id="qbDisc">Disconnect</button></span>
              <span>${st.errors.length ? '<button type="button" id="qbRetry">Try errors again</button> ' : ''}${acc && !acc.error ? '<button type="button" id="qbSave">Save</button> ' : ''}<button type="button" class="primary" id="qbSync" ${st.needs_reconnect ? 'disabled' : ''}>Sync now</button></span></div>`;
     if (quiet && !$('#qbDlg')) return;
-    openModal(`<div id="qbDlg"><h2>📊 QuickBooks</h2>${message ? `<div class="qbst" style="color:#fcd34d">${esc(message)}</div>` : ''}${body}
+    openModal(`<div id="qbDlg"><h2>📊 QuickBooks</h2>${message ? `<div class="qbst" style="color:var(--warn)">${esc(message)}</div>` : ''}${body}
       <div class="actions"><button type="button" onclick="closeModal()">Close</button></div></div>`);
     const go = (id, fn) => { if ($('#' + id)) $('#' + id).onclick = () => run(fn); };
     go('qbConnect', async () => { const r = await api('/api/qbo/connect'); location.href = r.url; });
@@ -392,9 +392,9 @@ const Shop = (() => {
     const owed = customers.reduce((n, c) => n + c.balance_cents, 0);
     openModal(`<h2>👥 Customers</h2>
       <div class="addrow"><input id="cq" type="search" placeholder="Search ${customers.length} customers…" value="${esc(q)}"><button type="button" class="primary" id="newCust">+ New customer</button></div>
-      ${owed ? `<div class="muted" style="font-size:14px;margin-top:6px">Owed by all customers: <b style="color:#fbbf24">${usd(owed)}</b></div>` : ''}
+      ${owed ? `<div class="muted" style="font-size:14px;margin-top:6px">Owed by all customers: <b style="color:var(--owed)">${usd(owed)}</b></div>` : ''}
       <div class="clist">${list.map((c) => `<div class="crow2" data-cust-open="${c.id}"><div><b>${esc(c.name)}</b><small>${[c.phone, c.email].filter(Boolean).map(esc).join(' · ') || '&nbsp;'}</small></div>
-        <div style="text-align:right;flex:none"><small>${c.jobs} job${c.jobs === 1 ? '' : 's'}</small>${c.balance_cents > 0 ? `<b style="color:#fbbf24">owes ${usd(c.balance_cents)}</b>` : ''}</div></div>`).join('') || '<p class="muted">No customers yet. They are added here, from a job ("Save as a customer"), or by themselves when an invoice is sent.</p>'}</div>
+        <div style="text-align:right;flex:none"><small>${c.jobs} job${c.jobs === 1 ? '' : 's'}</small>${c.balance_cents > 0 ? `<b style="color:var(--owed)">owes ${usd(c.balance_cents)}</b>` : ''}</div></div>`).join('') || '<p class="muted">No customers yet. They are added here, from a job ("Save as a customer"), or by themselves when an invoice is sent.</p>'}</div>
       <div class="actions"><button type="button" class="primary" onclick="closeModal()">Done</button></div>`);
     $('#cq').oninput = () => { const v = $('#cq').value; customersDialog(v); const i = $('#cq'); i.focus(); i.setSelectionRange(v.length, v.length); };
     $('#newCust').onclick = () => customerDialog(null);
@@ -408,7 +408,7 @@ const Shop = (() => {
       <label>Address</label><input name="address" maxlength="300" value="${esc(c.address || '')}">
       <label>Notes</label><textarea name="notes" rows="2" maxlength="2000">${esc(c.notes || '')}</textarea>
       ${id ? `<h3 style="margin:14px 0 4px">Jobs</h3><div class="clist" style="max-height:30vh">${c.jobs.map((j) => `<div class="crow2" data-job-open="${j.id}"><div><b>#${esc(j.job_number || j.id)} ${esc(j.title || '')}</b><small>${esc(j.phase || '')} · ${new Date(j.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</small></div>
-        <div style="text-align:right;flex:none"><small>${usd(j.total_cents)}</small>${j.balance_cents > 0 && j.total_cents ? `<b style="color:#fbbf24">owes ${usd(j.balance_cents)}</b>` : j.total_cents ? '<small style="color:#86efac">paid</small>' : ''}</div></div>`).join('') || '<p class="muted">No jobs yet.</p>'}</div>` : ''}
+        <div style="text-align:right;flex:none"><small>${usd(j.total_cents)}</small>${j.balance_cents > 0 && j.total_cents ? `<b style="color:var(--owed)">owes ${usd(j.balance_cents)}</b>` : j.total_cents ? '<small style="color:var(--paid)">paid</small>' : ''}</div></div>`).join('') || '<p class="muted">No jobs yet.</p>'}</div>` : ''}
       <div class="actions">${id ? '<button type="button" class="danger" id="delCust" style="margin-right:auto">Remove</button><button type="button" id="jobForCust">+ New job</button>' : ''}
         <button type="button" onclick="Shop.customersDialog()">Back</button><button class="primary" id="saveCust">Save</button></div>`);
     $('#saveCust').onclick = () => run(async () => {
