@@ -44,8 +44,37 @@
   .col h2 { margin: 0; padding: 10px 14px; font-size: 16px; letter-spacing: .08em; text-transform: uppercase; color: var(--head);
     display: flex; justify-content: space-between; border-bottom: 3px solid var(--line); }
   .col[data-s=new] h2 { border-color: var(--new); }
-  .col[data-s=picking] h2 { border-color: var(--picking); }
-  .col[data-s=ready] h2 { border-color: var(--ready); }
+  .col.cc h2 { border-color: var(--cc); align-items: center; }
+  .col.cc h2 .gear { margin-left: 8px; background: transparent; border: 0; color: var(--muted); font-size: 17px; cursor: pointer; padding: 2px 6px; }
+  .ticket.cc { border-left-color: var(--cc); }
+  .flags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .flags button { font-size: 13.5px; font-weight: 700; padding: 6px 10px; border-radius: 99px; border: 1.5px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
+  .flags button.on { background: var(--cc); border-color: var(--cc); color: #fff; }
+  .ord { display: flex; gap: 6px; margin-top: 8px; }
+  .ord button { flex: 1; padding: 8px 0; border-radius: 8px; border: 1px solid var(--line); background: var(--btn); color: var(--text); font-size: 15px; font-weight: 700; cursor: pointer; }
+  .ord button:disabled { opacity: .35; cursor: default; }
+  .col.cc .ticket.cc .actions button:first-child { background: var(--cc); color: #fff; }
+  .col.cc .ticket.cc.ready .actions button:first-child { background: var(--donebtn); color: var(--text); }
+  #dlg { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: none; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
+  #dlg.open { display: flex; }
+  #dlgbox { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 14px; padding: 20px; width: 100%; max-width: 520px; max-height: 92vh; overflow: auto; }
+  #dlgbox h3 { margin: 0 0 10px; color: var(--head); font-size: 20px; }
+  #dlgbox label { display: block; font-size: 14px; font-weight: 700; margin: 12px 0 4px; }
+  #dlgbox input, #dlgbox select { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; }
+  #dlgbox input[type=color] { padding: 2px; height: 40px; }
+  #dlgbox button { font: inherit; font-weight: 700; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--btn); color: var(--text); cursor: pointer; }
+  #dlgbox button:disabled { opacity: .35; cursor: default; }
+  #dlgbox button.pri { background: var(--accent2, #2f5a2a); border-color: transparent; color: #fff; }
+  #dlgbox button.del { background: var(--late); border-color: transparent; color: #fff; }
+  #dlgbox .row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  #dlgbox .row > input { flex: 1; }
+  #dlgbox .row select { width: auto; }
+  #dlgbox .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; flex-wrap: wrap; }
+  #dlgbox .clist > div { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  #dlgbox .clist i { width: 14px; height: 14px; border-radius: 4px; background: var(--c); flex: none; }
+  #dlgbox .clist b { flex: 1; }
+  #dlgbox .clist button { padding: 6px 10px; }
+  #dlgbox .muted { color: var(--muted); font-size: 14px; }
   .count { color: var(--muted); }
   .list { flex: 1; overflow-y: auto; padding: 10px; }
   .ticket { background: var(--card); border: 1px solid var(--line); border-left: 6px solid var(--new);
@@ -118,6 +147,8 @@
   <div class="brand"><span data-brand></span><span class="dot" id="dot"></span><span id="sname">Loading…</span></div>
   <div class="meta">
     <button class="bellbtn" id="bellbtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span>Bell on</span></button>
+    <button class="out" id="colsbtn" type="button" title="Columns after New">⚙ Columns</button>
+    <button class="out" id="secbtn" type="button" title="Password, backup email, support access">🔒 Login</button>
     <span class="conn" id="conn"><i></i><span>Connecting</span></span>
     <span id="clock">--:--</span>
     <button class="out" id="outbtn" type="button" title="Sign out this screen">Sign out</button>
@@ -127,12 +158,13 @@
 <div id="alert" role="alert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span id="alerttext">New order</span><small>Tap to stop</small></div>
 <main>
   <section class="col" data-s="new"><h2>New <span class="count" id="c-new">0</span></h2><div class="list" id="l-new"></div></section>
-  <section class="col" data-s="picking"><h2>Picking <span class="count" id="c-picking">0</span></h2><div class="list" id="l-picking"></div></section>
-  <section class="col" data-s="ready"><h2>Ready for pickup <span class="count" id="c-ready">0</span></h2><div class="list" id="l-ready"></div></section>
+  <!-- columns after New: the store's own (⚙ Columns) -->
 </main>
+<div id="dlg" role="dialog"><form id="dlgbox" onsubmit="return false"></form></div>
 <div id="overlay">Tap to start<small>Turns on the new-order bell</small></div>
 <div id="error"></div>
 <script src="/brand.js"></script>
+<script src="/security-ui.js"></script>
 <script>
 // The sign-in page this screen came from (/login/store), so signing out goes back to it.
 function hbLogin() { try { var p = localStorage.getItem('hb_login'); if (p && /^\/login(\/[a-z]+)?$/.test(p)) return p; } catch (e) { /* ok */ } return '/login'; }
@@ -143,6 +175,7 @@ function hbLogin() { try { var p = localStorage.getItem('hb_login'); if (p && /^
   var STORE = null; // this store's id, from the signed-in account
   var LATE_MIN = Number(qs.get('late') || 15);   // minutes before a ticket turns red
   var tickets = {}, printed = {}, store = null, audioCtx = null, confirmTimer = null;
+  var cols = []; // the store's columns after New: [{id, name, color, buttons:[{label, place}]}]
 
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -246,6 +279,35 @@ function hbLogin() { try { var p = localStorage.getItem('hb_login'); if (p && /^
 
   var NEXT = { 'new': ['picking', 'Start picking'], picking: ['ready', 'Ready'], ready: ['done', 'Picked up'] };
 
+  // A card in one of the store's own columns (after New): move on, arrange, tag.
+  function ccard(t, col, i, list) {
+    var e = elapsed(t.createdAt), k = cols.indexOf(col), last = k === cols.length - 1;
+    var items = t.items.map(function (it) {
+      return '<li><span class="qty">' + esc(it.qty) + '×</span><div><div class="iname">' + esc(it.name) + '</div>' +
+        '<div class="sku">#' + esc(it.sku || '—') + '</div>' +
+        (it.options && it.options.length ? '<div class="opt">' + esc(it.options.join(' · ')) + '</div>' : '') + '</div></li>';
+    }).join('');
+    var printMark = store && store.printer ? (printed[t.id] ? '<span class="printed">✓ printed</span>' : '') : '<span class="noprint">no printer</span>';
+    var flags = (col.buttons || []).map(function (b) {
+      var on = (t.flags || []).indexOf(b.label) !== -1;
+      return '<button type="button" class="' + (on ? 'on' : '') + '" data-id="' + esc(t.id) + '" data-flag="' + esc(b.label) + '">' + esc(b.label) + (b.place === 'top' ? ' ⬆' : b.place === 'bottom' ? ' ⬇' : '') + '</button>';
+    }).join('');
+    var id = esc(t.id);
+    return '<div class="ticket cc ' + t.status + (e.m >= LATE_MIN && t.status !== 'ready' ? ' late' : '') + '" id="t-' + id + '" style="--cc:' + esc(col.color) + '">' +
+      '<div class="thead"><span class="onum">#' + esc(t.orderNumber) + printMark + '</span><span class="timer" data-at="' + esc(t.createdAt) + '">' + e.text + '</span></div>' +
+      '<div class="cust"><b>' + esc(t.customer.name) + '</b>' + (t.customer.phone ? ' · ' + esc(t.customer.phone) : '') + '</div>' +
+      '<ul class="items">' + items + '</ul>' +
+      (t.note ? '<div class="note">' + esc(t.note) + '</div>' : '') +
+      (flags ? '<div class="flags">' + flags + '</div>' : '') +
+      '<div class="actions">' + (last ? '<button data-id="' + id + '" data-next="done">Picked up</button>'
+        : '<button data-id="' + id + '" data-tocol="' + cols[k + 1].id + '">' + esc(cols[k + 1].name) + ' ›</button>') +
+      (store && store.printer ? '<button data-id="' + id + '" data-reprint="1">Reprint</button>' : '') + '</div>' +
+      '<div class="ord"><button type="button" data-id="' + id + '" ' + (k > 0 ? 'data-tocol="' + cols[k - 1].id + '"' : 'disabled') + ' title="Back to ' + (k > 0 ? esc(cols[k - 1].name) : '') + '">‹ Back</button>' +
+      '<button type="button" data-id="' + id + '" data-ord="up" title="Move up"' + (i === 0 ? ' disabled' : '') + '>▲</button>' +
+      '<button type="button" data-id="' + id + '" data-ord="down" title="Move down"' + (i === list.length - 1 ? ' disabled' : '') + '>▼</button>' +
+      '<button type="button" data-id="' + id + '" data-ord="top" title="To the top"' + (i === 0 ? ' disabled' : '') + '>⤒ Top</button></div></div>';
+  }
+
   function card(t) {
     var e = elapsed(t.createdAt), next = NEXT[t.status];
     var items = t.items.map(function (it) {
@@ -264,19 +326,42 @@ function hbLogin() { try { var p = localStorage.getItem('hb_login'); if (p && /^
   }
 
   function render() {
-    ['new', 'picking', 'ready'].forEach(function (s) {
-      var list = Object.keys(tickets).map(function (k) { return tickets[k]; })
-        .filter(function (t) { return t.status === s; })
-        .sort(function (a, b) { return a.createdAt.localeCompare(b.createdAt); });
-      $('c-' + s).textContent = list.length;
-      $('l-' + s).innerHTML = list.length ? list.map(card).join('') : '<div class="empty">No orders</div>';
+    var all = Object.keys(tickets).map(function (k) { return tickets[k]; });
+    // New: exactly as before (oldest first, bell, alerts, Start picking)
+    var list = all.filter(function (t) { return t.status === 'new'; }).sort(function (a, b) { return a.createdAt.localeCompare(b.createdAt); });
+    $('c-new').textContent = list.length;
+    $('l-new').innerHTML = list.length ? list.map(card).join('') : '<div class="empty">No orders</div>';
+    // the store's own columns
+    var main = document.querySelector('main');
+    main.querySelectorAll('.col.cc').forEach(function (n) { n.remove(); });
+    cols.forEach(function (c, k) {
+      var mine = all.filter(function (t) {
+        if (t.status !== 'picking' && t.status !== 'ready') return false;
+        var cid = cols.some(function (x) { return x.id === t.columnId; }) ? t.columnId : (t.status === 'ready' ? cols[cols.length - 1].id : cols[0].id);
+        return cid === c.id;
+      }).sort(function (a, b) { return ((a.sortPos == null ? 1e15 : a.sortPos) - (b.sortPos == null ? 1e15 : b.sortPos)) || a.createdAt.localeCompare(b.createdAt); });
+      var sec = document.createElement('section');
+      sec.className = 'col cc'; sec.style.setProperty('--cc', c.color);
+      sec.innerHTML = '<h2><span>' + esc(c.name) + '</span><span style="flex:1"></span><span class="count">' + mine.length + '</span><button type="button" class="gear" data-colset="' + c.id + '" title="Column settings">⚙</button></h2>' +
+        '<div class="list">' + (mine.length ? mine.map(function (t, i) { return ccard(t, c, i, mine); }).join('') : '<div class="empty">No orders</div>') + '</div>';
+      main.appendChild(sec);
     });
   }
 
   document.addEventListener('click', function (ev) {
+    var g = ev.target.closest('[data-colset]');
+    if (g) return colDialog(Number(g.getAttribute('data-colset')));
     var b = ev.target.closest('button[data-id]');
-    if (!b) return;
+    if (!b || b.disabled) return;
     var id = b.getAttribute('data-id');
+    var post = function (path, body) {
+      b.disabled = true;
+      return api('/api/store/tickets/' + encodeURIComponent(id) + path, { method: 'POST', body: JSON.stringify(body) })
+        .then(function (u) { if (u && u.id) upsert(u); }, function (e) { b.disabled = false; alert(e.message || 'Could not update — check the connection.'); });
+    };
+    if (b.getAttribute('data-tocol')) return post('/column', { column_id: Number(b.getAttribute('data-tocol')) });
+    if (b.getAttribute('data-ord')) return post('/order', { action: b.getAttribute('data-ord') });
+    if (b.getAttribute('data-flag')) return post('/flag', { label: b.getAttribute('data-flag') });
     if (b.getAttribute('data-reprint')) {
       b.textContent = 'Sending…';
       api('/api/store/tickets/' + encodeURIComponent(id) + '/reprint', { method: 'POST', body: '{}' })
@@ -336,9 +421,70 @@ function hbLogin() { try { var p = localStorage.getItem('hb_login'); if (p && /^
       var m = JSON.parse(e.data);
       if (m.type === 'ticket' && m.ticket) upsert(m.ticket);
       else if (m.type === 'printed') { printed[m.ticketId] = true; render(); }
+      else if (m.type === 'storecols') loadCols().then(render);
       else if (m.type === 'account') location.reload(); // switched off, renamed or changed by the admin
     };
   }
+
+  // ---------- the store's columns after New (⚙ Columns) ----------
+  function loadCols() { return api('/api/store/columns').then(function (c) { cols = c; }); }
+  function openDlg(html) { $('dlgbox').innerHTML = html; $('dlg').classList.add('open'); return $('dlgbox'); }
+  function closeDlg() { $('dlg').classList.remove('open'); }
+  $('dlg').addEventListener('mousedown', function (e) { if (e.target.id === 'dlg') closeDlg(); });
+  function call(path, method, body) { return api(path, { method: method, body: JSON.stringify(body || {}) }); }
+  function colsDialog() {
+    var f = openDlg('<h3>⚙ Columns</h3><div class="muted">New stays first, with the bell and alerts. These are the columns after it; the last one finishes orders (Picked up). Tap ✏️ to change a column’s name, color and buttons; ← → to move it.</div>' +
+      '<div class="clist"><div><i style="--c:var(--new)"></i><b>New</b><span class="muted">always first</span></div>' +
+      cols.map(function (c, k) {
+        return '<div><i style="--c:' + esc(c.color) + '"></i><b>' + esc(c.name) + (k === cols.length - 1 ? ' <span class="muted">(finishes orders)</span>' : '') + '</b>' +
+          '<button type="button" data-mv="-1" data-c="' + c.id + '"' + (k === 0 ? ' disabled' : '') + ' title="Move left">←</button>' +
+          '<button type="button" data-mv="1" data-c="' + c.id + '"' + (k === cols.length - 1 ? ' disabled' : '') + ' title="Move right">→</button>' +
+          '<button type="button" data-ed="' + c.id + '">✏️</button></div>';
+      }).join('') + '</div>' +
+      (cols.length < 6 ? '<div class="row"><input id="ncName" maxlength="30" placeholder="New column name, e.g. Bagging"><button type="button" class="pri" id="ncAdd">+ Add</button></div>' : '') +
+      '<div class="acts"><button type="button" id="dlgDone">Done</button></div>');
+    f.onclick = function (e) {
+      var t = e.target.closest('button'); if (!t || t.disabled) return;
+      if (t.id === 'dlgDone') return closeDlg();
+      if (t.getAttribute('data-ed')) return colDialog(Number(t.getAttribute('data-ed')));
+      if (t.getAttribute('data-mv')) return call('/api/store/columns/' + t.getAttribute('data-c') + '/move', 'POST', { direction: Number(t.getAttribute('data-mv')) }).then(loadCols).then(function () { render(); colsDialog(); }, function (er) { alert(er.message); });
+      if (t.id === 'ncAdd') {
+        var n = $('ncName').value.trim(); if (!n) return $('ncName').focus();
+        return call('/api/store/columns', 'POST', { name: n }).then(loadCols).then(function () { render(); colsDialog(); }, function (er) { alert(er.message); });
+      }
+    };
+    var nc = $('ncName'); if (nc) nc.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); $('ncAdd').click(); } };
+  }
+  function colDialog(id) {
+    var c = cols.filter(function (x) { return x.id === id; })[0]; if (!c) return;
+    var btnRow = function (b) {
+      return '<div class="row brow"><input maxlength="24" placeholder="Button name, e.g. Rush" value="' + esc(b ? b.label : '') + '">' +
+        '<select><option value="">stays put</option><option value="top"' + (b && b.place === 'top' ? ' selected' : '') + '>moves card to top ⬆</option><option value="bottom"' + (b && b.place === 'bottom' ? ' selected' : '') + '>moves card to bottom ⬇</option></select>' +
+        '<button type="button" data-rm="1" title="Remove">✕</button></div>';
+    };
+    var f = openDlg('<h3>Column: ' + esc(c.name) + '</h3>' +
+      '<label>Name</label><input id="cdName" maxlength="30" value="' + esc(c.name) + '">' +
+      '<label>Color</label><input id="cdColor" type="color" value="' + esc(c.color) + '">' +
+      '<label>Buttons on its orders <span class="muted">(up to 4; tap one on an order to turn it on or off)</span></label><div id="cdBtns">' + (c.buttons || []).map(btnRow).join('') + '</div>' +
+      '<button type="button" id="cdAddBtn" style="margin-top:8px">+ Add a button</button>' +
+      '<div class="acts"><button type="button" class="del" id="cdDel" style="margin-right:auto">Remove column</button><button type="button" id="cdBack">Cancel</button><button type="button" class="pri" id="cdSave">Save</button></div>');
+    f.onclick = function (e) {
+      var t = e.target.closest('button'); if (!t) return;
+      if (t.getAttribute('data-rm')) { t.closest('.brow').remove(); return; }
+      if (t.id === 'cdAddBtn') { if (f.querySelectorAll('.brow').length >= 4) return alert('Up to 4 buttons per column'); $('cdBtns').insertAdjacentHTML('beforeend', btnRow(null)); return; }
+      if (t.id === 'cdBack') return colsDialog();
+      if (t.id === 'cdSave') {
+        var buttons = [].map.call(f.querySelectorAll('.brow'), function (r) { return { label: r.querySelector('input').value.trim(), place: r.querySelector('select').value || null }; }).filter(function (x) { return x.label; });
+        return call('/api/store/columns/' + c.id, 'PUT', { name: $('cdName').value, color: $('cdColor').value, buttons: buttons }).then(loadCols).then(function () { render(); closeDlg(); }, function (er) { alert(er.message); });
+      }
+      if (t.id === 'cdDel') {
+        if (!confirm('Remove the column "' + c.name + '"? Its orders move to the next column over.')) return;
+        return call('/api/store/columns/' + c.id, 'DELETE').then(loadCols).then(function () { render(); colsDialog(); }, function (er) { alert(er.message); });
+      }
+    };
+  }
+  $('colsbtn').onclick = colsDialog;
+  $('secbtn').onclick = function () { HBSec.loginDialog({ owner: true, place: 'store' }); };
 
   function tick() {
     $('clock').textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -356,8 +502,9 @@ function hbLogin() { try { var p = localStorage.getItem('hb_login'); if (p && /^
     var th = me.account && me.account.theme === 'dark' ? 'dark' : 'ranch'; document.documentElement.dataset.theme = th; try { localStorage.setItem('hb_theme', th); } catch (e) { /* ok */ }
     if (me.admin) {
       document.body.classList.add('admin'); $('abname').textContent = me.household.name + ' (Store Orders)' + (me.account.active ? '' : ' · SWITCHED OFF');
-      $('outbtn').style.display = 'none'; $('overlay').style.display = 'none';
-    }
+      $('outbtn').style.display = 'none'; $('overlay').style.display = 'none'; $('secbtn').style.display = 'none';
+      if (me.acting_until) $('abname').insertAdjacentHTML('afterend', ' · as support until <b>' + new Date(me.acting_until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '</b>');
+    } else if (me.needs_backup) HBSec.backupBar(document.querySelector('header'), { owner: true, place: 'store' });
     return api('/api/store/info');
   }).then(function (s) {
     store = s; STORE = s.id;
@@ -365,7 +512,7 @@ function hbLogin() { try { var p = localStorage.getItem('hb_login'); if (p && /^
     $('dot').style.background = s.color || '';
     document.documentElement.style.setProperty('--accent', s.color || '#f59e0b');
     renderBell();
-    connect();
+    return loadCols().then(connect);
   }, function (e) {
     if (/switched off/.test(e.message)) {
       setTimeout(function () { location.reload(); }, 30000); // comes back by itself when switched on again
