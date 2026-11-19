@@ -93,7 +93,7 @@
   <span class="who" id="who"></span>
   <select id="lookSel" title="Look of this admin page" style="width:auto"><option value="ranch">🎨 Ranch</option><option value="dark">🎨 Dark</option></select>
   <button class="ghost" id="logoBtn" title="The logo circle in the top-left corner of every screen">Logo</button>
-  <button class="ghost" id="pwBtn">Change password</button>
+  <button class="ghost" id="pwBtn">🔒 My login</button>
   <button class="ghost" onclick="logout()">Sign out</button>
 </header>
 <nav class="tabs" id="tabs"></nav>
@@ -115,6 +115,7 @@
 <div class="modal-back" id="m"><form class="modal" id="mBody" onsubmit="return false"></form></div>
 <script src="/app.js"></script>
 <script src="/brand.js"></script>
+<script src="/security-ui.js"></script>
 <script>
 let data = null, tab = 'todo';
 const ORDER = ['todo', 'shop', 'store'];
@@ -180,7 +181,7 @@ $('#list').addEventListener('change', (e) => {
 $('#list').addEventListener('click', (e) => {
   const card = e.target.closest('[data-id]'); if (!card) return;
   const a = data.accounts.find((x) => x.id === Number(card.dataset.id));
-  if (e.target.closest('[data-open]')) return run(async () => { await api('/api/admin/open/' + a.id, {}); location.href = '/'; });
+  if (e.target.closest('[data-open]')) return accessDialog(a);
   if (e.target.closest('[data-edit]')) return editDialog(a);
 });
 
@@ -319,6 +320,7 @@ function editDialog(a) {
     ${storeFields(a.store, a.screen)}
     <label>Sign-in email</label><input name="email" type="email" value="${esc(a.email || '')}" autocomplete="off">
     <label>New password (leave empty to keep it)</label><div class="pwrow"><input name="password" type="text" autocomplete="off" placeholder="unchanged"><button type="button" id="gen">Make one</button></div>
+    <div class="muted" style="font-size:12.5px;margin-top:4px">🔒 The sign-in email and password can only be changed here in the account's first 3 days. After that only the owner can change them (on their screen, or with "Forgot password?").</div>
     <div class="muted" style="font-size:13px;margin-top:4px">A new password signs out every screen on this account.</div>
     <label>Look of the program</label><select name="theme"><option value="ranch" ${a.theme !== 'dark' ? 'selected' : ''}>Ranch: parchment &amp; green</option><option value="dark" ${a.theme === 'dark' ? 'selected' : ''}>Dark: charcoal, lime &amp; gold</option></select>
     <label class="check" style="margin-top:14px"><input type="checkbox" name="active" ${a.active ? 'checked' : ''}> Switched on</label>
@@ -376,16 +378,39 @@ $('#logoBtn').onclick = async () => {
     closeModal(); toast('Logo saved'); Brand.refresh();
   });
 };
-$('#pwBtn').onclick = () => {
-  const f = openModal(`<h2>Change your admin password</h2>
-    <label>Current password</label><input name="cur" type="password" autocomplete="current-password" required>
-    <label>New password (8 or more characters)</label><input name="pw" type="password" autocomplete="new-password" minlength="8" required>
-    <div class="actions"><button type="button" onclick="closeModal()">Cancel</button><button class="primary" id="savePw">Change</button></div>`);
-  $('#savePw').onclick = () => run(async () => {
-    if (!f.reportValidity()) return;
-    await api('/api/password', { current: f.cur.value, password: f.pw.value }); closeModal(); toast('Password changed');
+$('#pwBtn').onclick = () => HBSec.loginDialog({ owner: false });
+HBSec.checkBackup(document.querySelector('header.top'), { owner: false });
+
+// 🔒 Opening an account needs a one-time code from its owner (except its first 3 days). Access lasts 4 hours.
+async function accessDialog(a) {
+  const x = await run(() => api('/api/admin/access/' + a.id)); if (!x) return;
+  const until = new Date(x.setup_until).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const f = openModal(`<h2>🔒 Open ${esc(x.name)}</h2>
+    <p class="muted" style="margin:0 0 8px">For the owner's security, support opens an account only with a one-time code from the owner. A code works once, for 15 minutes; access lasts 4 hours. The owner sees every visit.</p>
+    ${x.in_setup ? `<div class="note">🛠 Setup days: until ${esc(until)} you can open it without a code. It's still logged.</div><div class="actions" style="justify-content:flex-start;margin-top:8px"><button type="button" class="primary" id="openSetup">Open without a code</button></div>` : ''}
+    <label>Send a code to</label>
+    ${x.email_ok ? `<div class="pwrow"><select name="to"><option value="main">Owner's email ${esc(x.main || '')}</option>${x.backup ? `<option value="backup">Backup email ${esc(x.backup)}</option><option value="both">Both emails</option>` : ''}</select><button type="button" id="sendCode">✉️ Email a code</button></div>
+      ${x.backup ? '' : '<div class="muted" style="font-size:12.5px;margin-top:4px">The owner hasn\'t added a backup email yet.</div>'}`
+    : '<div class="note">Email isn\'t set up, so codes can\'t be emailed. Ask the owner to make a code on their screen: <b>🔒 Login &amp; security → Make a code for support</b>.</div>'}
+    <div class="muted" id="sentNote" style="font-size:13px;margin-top:6px"></div>
+    <label>6-digit code from the owner</label>
+    <input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123 456" style="font-size:30px;letter-spacing:8px;text-align:center;font-weight:800">
+    <div class="err" id="codeErr"></div>
+    <div class="actions"><button type="button" onclick="closeModal()">Cancel</button><button class="primary" id="openWith">Open</button></div>`);
+  const go = (body) => run(async () => {
+    $('#codeErr').textContent = '';
+    try { await api('/api/admin/enter/' + a.id, body); location.href = '/'; }
+    catch (e) { $('#codeErr').textContent = e.message; }
   });
-};
+  if ($('#sendCode')) $('#sendCode').onclick = () => run(async () => {
+    try { const r = await api(`/api/admin/access/${a.id}/send`, { to: f.to.value }); $('#sentNote').textContent = '✓ Code sent to ' + r.sent_to.join(' and ') + '. Ask the owner to read it to you.'; f.code.focus(); }
+    catch (e) { $('#sentNote').textContent = '⚠ ' + e.message; }
+  });
+  if ($('#openSetup')) $('#openSetup').onclick = () => go({});
+  $('#openWith').onclick = () => go({ code: f.code.value });
+  f.code.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go({ code: f.code.value }); } });
+  setTimeout(() => f.code.focus(), 50);
+}
 
 (async () => {
   const h = location.hash.slice(1); if (ORDER.includes(h)) tab = h;
