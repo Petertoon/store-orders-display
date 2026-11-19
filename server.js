@@ -87,7 +87,7 @@ const requireLogin = wrap(async (req, res, next) => {
   if (!req.login) fail(401, 'Please sign in');
   const hid = req.login.is_admin ? req.login.acting_household_id : req.login.household_id;
   if (!hid) fail(400, 'Open an account from the admin page first');
-  const a = await pool.query('SELECT id, name, screen, active, qbo_on FROM households WHERE id=$1', [hid]);
+  const a = await pool.query("SELECT id, name, screen, active, qbo_on, COALESCE(theme, 'ranch') AS theme FROM households WHERE id=$1", [hid]);
   if (!a.rows[0]) fail(400, 'Open an account from the admin page first');
   if (!a.rows[0].active && !req.login.is_admin) fail(403, 'This account is switched off. Contact the administrator.');
   req.account = a.rows[0];
@@ -173,6 +173,14 @@ app.post('/api/me/member', requireLogin, wrap(async (req, res) => {
 }));
 
 // ---------- account settings & people (from the account's own screen) ----------
+const THEMES = ['ranch', 'dark'];
+const cleanTheme = (v) => { if (!THEMES.includes(v)) fail(400, 'Pick Ranch or Dark'); return v; };
+// "Look of the program" from the account's own Board setup / store screen. Every screen of the account reloads in the new look.
+app.put('/api/household/theme', requireLogin, wrap(async (req, res) => {
+  await pool.query('UPDATE households SET theme=$1 WHERE id=$2', [cleanTheme(req.body.theme), req.household_id]);
+  board.notify(req.household_id, { type: 'account' });
+  res.json({ ok: true });
+}));
 app.put('/api/household', requireLogin, wrap(async (req, res) => {
   await pool.query('UPDATE households SET name=$1 WHERE id=$2', [text(req.body.name, 'Name', { max: 80 }), req.household_id]);
   board.notify(req.household_id, { type: 'members' });
@@ -220,7 +228,7 @@ app.delete('/api/members/:id', requireLogin, wrap(async (req, res) => {
 const A = [requireSignIn, requireAdmin];
 app.get('/api/admin/accounts', ...A, wrap(async (req, res) => {
   const { rows } = await pool.query(`
-    SELECT h.id, h.name, h.screen, h.active, h.qbo_on, h.created_at,
+    SELECT h.id, h.name, h.screen, h.active, h.qbo_on, COALESCE(h.theme, 'ranch') AS theme, h.created_at,
       (SELECT l.email FROM logins l WHERE l.household_id = h.id ORDER BY l.id LIMIT 1) AS email,
       (SELECT count(*) FROM members m WHERE m.household_id = h.id AND m.active)::int AS people,
       (SELECT count(*) FROM todos t WHERE t.household_id = h.id AND t.done_at IS NULL)::int AS open_items,
@@ -243,7 +251,7 @@ app.post('/api/admin/accounts', ...A, wrap(async (req, res) => {
   if (!people.length && screen !== 'store') fail(400, 'Add at least one person');
   const id = await withTx(async (db) => {
     if ((await db.query('SELECT 1 FROM logins WHERE email=$1', [email])).rows.length) fail(400, 'That email is already used');
-    const h = await db.query('INSERT INTO households (name, screen) VALUES ($1,$2) RETURNING id', [name, screen]);
+    const h = await db.query('INSERT INTO households (name, screen, theme) VALUES ($1,$2,$3) RETURNING id', [name, screen, req.body.theme ? cleanTheme(req.body.theme) : null]);
     await db.query('INSERT INTO logins (household_id, email, password_hash) VALUES ($1,$2,$3)', [h.rows[0].id, email, hash]);
     for (const p of people) await addMember(db, h.rows[0].id, p);
     if (screen === 'store') await stores.saveSettings(db, h.rows[0].id, name, req.body.store || {});
@@ -262,7 +270,8 @@ app.put('/api/admin/accounts/:id', ...A, wrap(async (req, res) => {
     const screen = 'screen' in req.body ? cleanScreen(req.body.screen) : a.screen;
     const active = 'active' in req.body ? !!req.body.active : a.active;
     const qboOn = 'qbo_on' in req.body ? !!req.body.qbo_on : a.qbo_on;
-    await db.query('UPDATE households SET name=$1, screen=$2, active=$3, qbo_on=$4 WHERE id=$5', [name, screen, active, qboOn, id]);
+    const theme = 'theme' in req.body ? cleanTheme(req.body.theme) : a.theme;
+    await db.query('UPDATE households SET name=$1, screen=$2, active=$3, qbo_on=$4, theme=$5 WHERE id=$6', [name, screen, active, qboOn, theme, id]);
     // Store Orders accounts: their store settings (needed the first time an account moves to the Store Orders tab).
     if (screen === 'store' && (req.body.store || !(await stores.settingsFor(id, db)))) await stores.saveSettings(db, id, name, req.body.store || {});
     if (req.body.email) {
@@ -325,6 +334,9 @@ app.get('/brand-logo', wrap(async (req, res) => {
   if (!m) return res.status(404).end();
   res.set('Cache-Control', 'public, max-age=86400').type(m[1]).send(Buffer.from(m[2], 'base64'));
 }));
+// The admin page's own look (the accounts each have theirs).
+app.get('/api/admin/theme', requireSignIn, requireAdmin, wrap(async (req, res) => res.json({ theme: (await getSetting('admin_theme')) || 'ranch' })));
+app.put('/api/admin/theme', requireSignIn, requireAdmin, wrap(async (req, res) => { await setSetting('admin_theme', cleanTheme(req.body.theme)); res.json({ ok: true }); }));
 app.put('/api/admin/brand', requireSignIn, requireAdmin, wrap(async (req, res) => {
   const logo = req.body.logo;
   if (logo !== undefined) {
