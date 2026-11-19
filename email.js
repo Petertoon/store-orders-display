@@ -1,22 +1,39 @@
-// Emails each new store ticket to that store's address(es).
-// Uses any SMTP account: Gmail (with an App Password), Outlook, Zoho, Resend, etc.
-// Turned off automatically when SMTP_HOST / SMTP_USER / SMTP_PASS aren't set.
+// Email for HomeBoard: store tickets, Papa's Shop invoices, and login security (support codes, password resets).
+// Sends with Resend when RESEND_API_KEY is set (same as MultiPOS: from receipts@lokaalhub.com), otherwise with any
+// SMTP account (SMTP_HOST / SMTP_USER / SMTP_PASS). With neither, email is off and the screens say so.
 const nodemailer = require('nodemailer');
 
-const { SMTP_HOST, SMTP_USER, SMTP_PASS } = process.env;
+const { SMTP_HOST, SMTP_USER, SMTP_PASS, RESEND_API_KEY } = process.env;
+const RESEND_URL = process.env.RESEND_API_URL || 'https://api.resend.com/emails';
 const SMTP_PORT = Number(process.env.SMTP_PORT || 465);
-const EMAIL_FROM = process.env.EMAIL_FROM || SMTP_USER;
+const EMAIL_FROM = process.env.EMAIL_FROM || (RESEND_API_KEY ? 'HomeBoard <receipts@lokaalhub.com>' : SMTP_USER);
 const TIME_ZONE = process.env.TIME_ZONE || 'America/Chicago';
 
-const enabled = !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
-const transport = enabled
+const smtpOn = !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
+const enabled = !!RESEND_API_KEY || smtpOn;
+const transport = !RESEND_API_KEY && smtpOn
   ? nodemailer.createTransport({
       host: SMTP_HOST, port: SMTP_PORT, secure: SMTP_PORT === 465,
       auth: { user: SMTP_USER, pass: SMTP_PASS },
       connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 15000,
     })
   : null;
-if (!enabled) console.warn('[email] SMTP not configured — store emails are off');
+if (!enabled) console.warn('[email] no RESEND_API_KEY or SMTP settings — emails are off');
+
+// One way out for every email.
+async function deliver({ to, subject, html, text, replyTo }) {
+  if (RESEND_API_KEY) {
+    const r = await fetch(RESEND_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: EMAIL_FROM, to: Array.isArray(to) ? to : [to], subject, html, text, ...(replyTo ? { reply_to: replyTo } : {}) }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!r.ok) throw new Error(`Resend ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    return;
+  }
+  await transport.sendMail({ from: EMAIL_FROM, to, subject, html, text, replyTo });
+}
 
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -77,10 +94,10 @@ function build(store, t) {
 async function sendTicketEmail(store, ticket) {
   const to = recipients(store);
   if (!to.length) return { ok: true, skipped: true };
-  if (!enabled) return { ok: false, error: 'SMTP not configured' };
+  if (!enabled) return { ok: false, error: 'Email is not set up' };
   try {
     const { subject, html, text } = build(store, ticket);
-    await transport.sendMail({ from: EMAIL_FROM, to, subject, html, text });
+    await deliver({ to, subject, html, text });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e.message };
@@ -89,9 +106,9 @@ async function sendTicketEmail(store, ticket) {
 
 // Any other email (Papa's Shop invoices). Returns { ok } or { ok: false, error }; never throws.
 async function sendMail({ to, subject, html, text, replyTo }) {
-  if (!enabled) return { ok: false, error: 'Email is not set up (SMTP settings in Render)' };
+  if (!enabled) return { ok: false, error: 'Email is not set up (RESEND_API_KEY or SMTP settings in Render)' };
   try {
-    await transport.sendMail({ from: EMAIL_FROM, to, subject, html, text, replyTo });
+    await deliver({ to, subject, html, text, replyTo });
     return { ok: true };
   } catch (e) { return { ok: false, error: e.message }; }
 }
