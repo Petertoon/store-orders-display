@@ -6,18 +6,31 @@
 <title>Store Orders</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%9B%92%3C/text%3E%3C/svg%3E">
 <meta name="theme-color" content="#171a21"><meta name="mobile-web-app-capable" content="yes">
+<script>try { document.documentElement.dataset.theme = localStorage.getItem('hb_theme') || 'ranch'; } catch (e) { document.documentElement.dataset.theme = 'ranch'; }</script>
 <style>
+  /* Dark and Ranch looks (same as the rest of HomeBoard); the store's own color stays its own. */
   :root {
-    --bg: #0f1115; --panel: #171a21; --card: #1f232c; --line: #2c313c;
-    --text: #eef1f6; --muted: #8b93a3; --accent: #f59e0b;
-    --new: #3b82f6; --picking: #f59e0b; --ready: #22c55e; --late: #ef4444;
+    --bg: #121418; --panel: #17191e; --card: #22262e; --line: #2e323b;
+    --text: #f1f2f4; --muted: #9aa0aa; --accent: #d9a93a; --head: #d9a93a;
+    --new: #5b9cf0; --picking: #f0b46a; --ready: #7cc04a; --late: #ef5350;
+    --btn: #2a2e36; --opt: #c9cdd4; --notebg: #3a2f12; --notetx: #f0d27a; --flash: #2c3a22;
+    --onbg: #1f2a17; --ontx: #8fd16a; --onb: #7cc04a; --donebtn: #e6e8ec; --brand: #f1f2f4;
+  }
+  html[data-theme=ranch] {
+    --bg: #efe5cf; --panel: linear-gradient(180deg, #e7d4ac, #d9c093); --card: #fffaf0; --line: #d8c9a8;
+    --text: #2b2417; --muted: #7a6a50; --accent: #2f5a2a; --head: #7f3b33;
+    --new: #24496e; --picking: #b8741a; --ready: #2f5a2a; --late: #8b2e24;
+    --btn: #ece2cc; --opt: #4a3d28; --notebg: #f6e3c0; --notetx: #6b3f0b; --flash: #fde7b0;
+    --onbg: #dfe9d4; --ontx: #2f5a2a; --onb: #2f5a2a; --donebtn: #ead9b6; --brand: #7f3b33;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
     font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
   header { display: flex; align-items: center; justify-content: space-between;
     padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
-  .brand { display: flex; align-items: center; font-size: 22px; font-weight: 700; }
+  html[data-theme=ranch] header { border-bottom-color: #c4a874; }
+  html[data-theme=ranch] .meta { color: #4a3d28; }
+  .brand { display: flex; align-items: center; font-size: 22px; font-weight: 700; color: var(--brand); }
   .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); margin-right: 10px; }
   .meta { display: flex; align-items: center; color: var(--muted); font-size: 16px; }
   .meta > * { margin-left: 18px; }
@@ -28,7 +41,7 @@
   main { display: flex; height: calc(100% - 56px); }
   .col { flex: 1; display: flex; flex-direction: column; border-right: 1px solid var(--line); min-width: 0; }
   .col:last-child { border-right: 0; }
-  .col h2 { margin: 0; padding: 10px 14px; font-size: 16px; letter-spacing: .08em; text-transform: uppercase;
+  .col h2 { margin: 0; padding: 10px 14px; font-size: 16px; letter-spacing: .08em; text-transform: uppercase; color: var(--head);
     display: flex; justify-content: space-between; border-bottom: 3px solid var(--line); }
   .col[data-s=new] h2 { border-color: var(--new); }
   .col[data-s=picking] h2 { border-color: var(--picking); }
@@ -41,7 +54,7 @@
   .ticket.ready { border-left-color: var(--ready); }
   .ticket.late .timer { color: var(--late); font-weight: 700; }
   .ticket.flash { animation: flash 1s ease-in-out 3; }
-  @keyframes flash { 50% { background: #2a3550; } }
+  @keyframes flash { 50% { background: var(--flash); } }
   .thead { display: flex; justify-content: space-between; align-items: baseline; }
   .onum { font-size: 22px; font-weight: 800; }
   .timer { font-size: 18px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -52,23 +65,24 @@
   .qty { min-width: 46px; font-size: 22px; font-weight: 800; color: var(--accent); }
   .iname { font-size: 18px; font-weight: 600; }
   .sku { font-size: 14px; color: var(--muted); font-family: ui-monospace, Menlo, Consolas, monospace; }
-  .opt { font-size: 14px; color: #c9d1de; }
-  .note { margin-top: 8px; padding: 6px 8px; background: #2b2410; color: #fcd34d; border-radius: 6px; font-size: 14px; }
+  .opt { font-size: 14px; color: var(--opt); }
+  .note { margin-top: 8px; padding: 6px 8px; background: var(--notebg); color: var(--notetx); border-radius: 6px; font-size: 14px; }
   .actions { display: flex; margin-top: 10px; }
   .actions button { flex: 1; font-size: 17px; font-weight: 700; padding: 12px; border: 0; border-radius: 8px;
-    color: #0b0d12; background: var(--picking); cursor: pointer; }
-  .actions button + button { margin-left: 8px; flex: 0 0 auto; background: #2d3340; color: var(--text); font-weight: 600; }
+    color: #fff; background: var(--picking); cursor: pointer; }
+  html[data-theme=dark] .actions button { color: #0b0d12; }
+  .actions button + button { margin-left: 8px; flex: 0 0 auto; background: var(--btn); color: var(--text); font-weight: 600; }
   .ticket.picking .actions button:first-child { background: var(--ready); }
-  .ticket.ready .actions button:first-child { background: #e5e7eb; }
+  .ticket.ready .actions button:first-child { background: var(--donebtn); color: var(--text); }
   .actions button.confirm { background: var(--late) !important; color: #fff; }
   .printed { font-size: 13px; color: var(--ready); margin-left: 8px; }
   .noprint { font-size: 13px; color: var(--late); margin-left: 8px; }
   .empty { color: var(--muted); text-align: center; margin-top: 40px; }
   #clock, .bellbtn { white-space: nowrap; }
   .bellbtn { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 700; padding: 7px 12px;
-    border-radius: 99px; border: 1px solid var(--line); background: #2d3340; color: var(--muted); cursor: pointer; }
+    border-radius: 99px; border: 1px solid var(--line); background: var(--btn); color: var(--muted); cursor: pointer; }
   .bellbtn svg { width: 18px; height: 18px; }
-  .bellbtn.on { background: #123320; color: #86efac; border-color: #1f6b3d; }
+  .bellbtn.on { background: var(--onbg); color: var(--ontx); border-color: var(--onb); }
   #alert { display: none; align-items: center; justify-content: center; gap: 14px; padding: 16px; cursor: pointer;
     background: var(--late); color: #fff; font-size: 24px; font-weight: 800; text-align: center; user-select: none; }
   #alert.show { display: flex; animation: alertflash 1s steps(2) infinite; }
@@ -339,6 +353,7 @@ function hbLogin() { try { var p = localStorage.getItem('hb_login'); if (p && /^
   tick(); setInterval(tick, 1000);
 
   api('/api/me').then(function (me) {
+    var th = me.account && me.account.theme === 'dark' ? 'dark' : 'ranch'; document.documentElement.dataset.theme = th; try { localStorage.setItem('hb_theme', th); } catch (e) { /* ok */ }
     if (me.admin) {
       document.body.classList.add('admin'); $('abname').textContent = me.household.name + ' (Store Orders)' + (me.account.active ? '' : ' · SWITCHED OFF');
       $('outbtn').style.display = 'none'; $('overlay').style.display = 'none';
