@@ -153,6 +153,19 @@ CREATE TABLE IF NOT EXISTS tickets (
 );
 CREATE INDEX IF NOT EXISTS tickets_store_status ON tickets(store_id, status);
 CREATE INDEX IF NOT EXISTS tickets_order ON tickets(order_id);
+-- Store screen columns after New (New itself never changes). Orders in them can be reordered and tagged.
+CREATE TABLE IF NOT EXISTS store_columns (
+  id SERIAL PRIMARY KEY,
+  store_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  color TEXT NOT NULL DEFAULT '#f0b46a',
+  position INT NOT NULL DEFAULT 0,
+  buttons JSONB NOT NULL DEFAULT '[]'
+);
+CREATE INDEX IF NOT EXISTS store_columns_store ON store_columns(store_id);
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS column_id INT;
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS sort_pos DOUBLE PRECISION;
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS flags JSONB NOT NULL DEFAULT '[]';
 CREATE TABLE IF NOT EXISTS print_jobs (
   id SERIAL PRIMARY KEY,
   ticket_id TEXT NOT NULL,
@@ -284,6 +297,40 @@ CREATE TABLE IF NOT EXISTS qbo_removals (
   qbo_id TEXT NOT NULL,
   label TEXT,
   error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Security (same rules as MultiPOS, SECURITY-HANDOVER.md): the admin opens an account only with a one-time code
+-- from its owner (or in its first 3 days); every visit is logged for the owner. Backup email + "Forgot password?".
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS acting_until TIMESTAMPTZ;
+ALTER TABLE logins ADD COLUMN IF NOT EXISTS backup_email TEXT;
+CREATE TABLE IF NOT EXISTS support_codes (
+  id SERIAL PRIMARY KEY,
+  household_id INT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  code_hash TEXT NOT NULL,
+  made_by TEXT NOT NULL,
+  requested_by INT REFERENCES logins(id) ON DELETE SET NULL,
+  attempts INT NOT NULL DEFAULT 0,
+  used_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS support_codes_house ON support_codes (household_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS support_access_log (
+  id SERIAL PRIMARY KEY,
+  household_id INT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  login_id INT REFERENCES logins(id) ON DELETE SET NULL,
+  user_name TEXT,
+  action TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS support_log_house ON support_access_log (household_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS password_resets (
+  id SERIAL PRIMARY KEY,
+  login_id INT NOT NULL REFERENCES logins(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
