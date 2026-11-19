@@ -38,3 +38,12 @@ function isoDay(d = new Date()) {
   const p = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
+
+// Look of the program: 'ranch' (default) or 'dark'. The page's <head> sets the remembered look before drawing;
+// this applies the account's own setting once it's known, and remembers it for next time on this screen.
+function applyTheme(t) {
+  t = t === 'dark' ? 'dark' : 'ranch';
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem('hb_theme', t); } catch (e) { /* ok */ }
+  const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = t === 'dark' ? '#17191e' : '#d9c093';
+}
