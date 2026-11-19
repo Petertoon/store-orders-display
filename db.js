@@ -287,6 +287,9 @@ CREATE TABLE IF NOT EXISTS qbo_removals (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Look of the program per account: 'ranch' (parchment & green, the default) or 'dark' (charcoal, lime & gold).
+ALTER TABLE households ADD COLUMN IF NOT EXISTS theme TEXT;
+
 -- Calendar column: a column of dated to-dos/events; on its day each one moves to the chosen column (normally Today).
 ALTER TABLE board_columns ADD COLUMN IF NOT EXISTS kind TEXT;
 ALTER TABLE board_columns ADD COLUMN IF NOT EXISTS cal_target INT;
